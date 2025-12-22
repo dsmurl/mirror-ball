@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "strict": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@mirrorball/shared-schemas": ["libs/shared-schemas/src/index.ts"]
+    },
+    "types": []
+  },
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "mirrorball",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "typecheck": "echo 'Typecheck is managed by Nx in CI'",
+    "build": "echo 'Build is managed by Nx in CI'",
+    "lint": "echo 'Lint is managed by Nx in CI'",
+    "serve": "echo 'Serve via Nx project targets (see docs)'"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  }
+}

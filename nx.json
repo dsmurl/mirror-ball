@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/nx.json",
+  "nxVersion": "19.5.0",
+  "defaultBase": "main",
+  "workspaceLayout": {
+    "appsDir": "apps",
+    "libsDir": "libs"
+  },
+  "plugins": [],
+  "targetDefaults": {
+    "build": {
+      "cache": true
+    },
+    "typecheck": {
+      "cache": true
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nrwl/nx/master/packages/nx/schemas/project-schema.json",
+  "name": "infra",
+  "sourceRoot": "apps/infra",
+  "projectType": "application",
+  "targets": {
+    "preview": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pulumi preview",
+        "cwd": "apps/infra"
+      }
+    },
+    "up": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pulumi up --yes",
+        "cwd": "apps/infra"
+      }
+    },
+    "destroy": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pulumi destroy --yes",
+        "cwd": "apps/infra"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/infra/tsconfig.json --noEmit"
+      }
+    }
+  },
+  "tags": []
+}

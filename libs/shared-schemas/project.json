@@ -1,0 +1,20 @@
+{
+  "name": "shared-schemas",
+  "sourceRoot": "libs/shared-schemas/src",
+  "projectType": "library",
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p libs/shared-schemas/tsconfig.lib.json --noEmit"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p libs/shared-schemas/tsconfig.lib.json"
+      }
+    }
+  },
+  "tags": []
+}

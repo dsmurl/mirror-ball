@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      STACK_NAME: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Setup Pulumi
+        uses: pulumi/actions@v5
+        with:
+          pulumi-version: latest
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOYER_ARN }}
+          aws-region: us-west-2
+
+      - name: Ensure infra (Stage 1)
+        working-directory: apps/infra
+        run: pulumi up --yes --stack $STACK_NAME
+
+      - name: Read ECR repo URI
+        id: ecr
+        working-directory: apps/infra
+        run: |
+          echo "repo=$(pulumi stack output --stack $STACK_NAME ecrRepositoryUri)" >> $GITHUB_OUTPUT
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        env:
+          ECR_REPO: ${{ steps.ecr.outputs.repo }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$ECR_REPO:$IMAGE_TAG" -f apps/api/Dockerfile .
+          docker push "$ECR_REPO:$IMAGE_TAG"
+
+      - name: Set imageTag config (Stage 2 wiring)
+        working-directory: apps/infra
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          pulumi config set --stack $STACK_NAME imageTag "$IMAGE_TAG"
+
+      - name: Apply Stage 2
+        working-directory: apps/infra
+        run: pulumi up --yes --stack $STACK_NAME
+
+      - name: Read deploy outputs
+        id: outs
+        working-directory: apps/infra
+        run: |
+          echo "bucket=$(pulumi stack output --stack $STACK_NAME bucketName)" >> $GITHUB_OUTPUT
+          echo "cfid=$(pulumi stack output --stack $STACK_NAME cloudFrontDistributionId)" >> $GITHUB_OUTPUT
+
+      - name: Build frontend
+        run: pnpm nx build frontend
+
+      - name: Sync site to S3
+        env:
+          BUCKET: ${{ steps.outs.outputs.bucket }}
+        run: |
+          aws s3 sync apps/frontend/dist "s3://$BUCKET/site" --delete
+
+      - name: Create CloudFront invalidation
+        if: ${{ steps.outs.outputs.cfid != '' }}
+        env:
+          CFID: ${{ steps.outs.outputs.cfid }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id "$CFID" --paths "/*"

@@ -24,14 +24,15 @@ Notes
 - Pulumi is the IaC tool. The frontend will still use a JS/TS package manager (pnpm/npm/yarn); Deno will manage backend code where used. This plan uses Pulumi to orchestrate infra, not as an app package manager.
 
 #### 2) High-Level Architecture (Nx monorepo, Deno API service, no Lambdas)
+- Region: Default deployment region is `us-west-2`.
 - Auth: Amazon Cognito Hosted UI + Cognito User Pool. Two groups: dev, admin.
-- API: Single Deno web service (containerized) exposes minimal endpoints. No API Gateway, no Lambda. Deployed on AWS App Runner (preferred) or ECS Fargate.
+- API: Single Deno web service (containerized) exposes minimal endpoints. No API Gateway, no Lambda. Deployed on AWS App Runner in `us-west-2` (fallback to ECS Fargate only if App Runner is unavailable).
 - Uploads: Frontend calls the Deno API to obtain pre-signed S3 PUT URLs. API validates JWT (Cognito) and role (group claim).
 - Metadata: DynamoDB single-table for image metadata (owner, uploadTime, devName, s3Key, publicUrl). API performs writes/reads.
 - Public URL: CloudFront distribution with two origins: S3 (site + images prefixes) and API origin (App Runner/ECS). CloudFront routes `/api/*` to the API origin and everything else to S3. S3 remains private using CloudFront OAC.
 
 Email domain control options (no Lambdas required)
-- Primary (simple, immediate): API-level enforcement. The Deno API reads an `ALLOWED_EMAIL_DOMAINS` config (comma-separated list) and rejects upload/delete endpoints when the Cognito token `email` claim is not in an allowed domain. Listing/search remains available to authenticated users regardless of domain.
+- Primary (simple, immediate): API-level enforcement. The Deno API reads an `ALLOWED_EMAIL_DOMAINS` config (comma-separated list) and rejects upload/delete endpoints when the Cognito token `email` claim is not in an allowed domain. Listing/search remains available to authenticated users regardless of domain. If `ALLOWED_EMAIL_DOMAINS` is not set or is empty, no domain restriction is applied (uploads/deletes allowed subject to role checks only).
 - Optional (stronger at identity layer): Use Cognito federated IdP with a Google Workspace OIDC provider restricted to your company domain. Disable native signup/self-registration to ensure only employees can sign in via Workspace. This requires adding a Cognito OIDC provider but no Lambda triggers.
 
 #### 3) Roles & Authorization Model
@@ -90,7 +91,7 @@ Schema-first contracts with Zod
 Authorization details
 - In addition to role checks, enforce an email domain allowlist for mutating endpoints (presign-upload, confirm-upload, delete). Pseudocode:
   - Parse `email` from ID token claims.
-  - If `ALLOWED_EMAIL_DOMAINS` is set, ensure `email.toLowerCase().endsWith('@' + anyAllowedDomain)`. Otherwise, allow by default.
+  - If `ALLOWED_EMAIL_DOMAINS` is set and non-empty, ensure `email.toLowerCase().endsWith('@' + anyAllowedDomain)`. Otherwise (unset or empty), allow by default (no domain restriction).
   - If not matched, return 403 with message "Uploads restricted to company domain".
 
 #### 6) Frontend (Vite)
@@ -131,12 +132,15 @@ Resources:
 - DynamoDB: `Images` table (on-demand capacity)
 - Containerized Deno API Service
   - Container registry: ECR repository
-  - Service platform: App Runner (simpler) or ECS Fargate (if needed). Prefer App Runner.
+  - Service platform: App Runner in `us-west-2` (simpler) or ECS Fargate (only if necessary).
   - Networking: Public HTTPS endpoint; CloudFront routes `/api/*` to this origin
 - IAM roles and policies
   - Service execution role with least-privilege access to S3 bucket (scoped to `images/*`), DynamoDB table, and CloudWatch Logs
   - ECR pull permissions for the service
   - CloudFront OAC permissions to S3
+  - Two GitHub OIDC deploy roles:
+    - `mirrorball-deployer` — permissions to deploy/update (Pulumi up), build/push images, sync site.
+    - `mirrorball-destroyer` — permissions to destroy the stack (Pulumi destroy). Use only in a dedicated GitHub Action workflow.
 
 Outputs:
 - `cloudFrontDomainName`, `bucketName`, `userPoolId`, `userPoolClientId`, `apiBaseUrl`, `tableName`.
@@ -148,7 +152,7 @@ Data access approach (DynamoDB — no ORM)
 - Future note: Reassess only if data access complexity grows substantially; do not introduce an ORM in the MVP.
 
 #### 8) AWS Permissions File (in-repo)
-Create `infra/permissions/policies.json` containing:
+Create `apps/infra/permissions/policies.json` containing:
 - Managed policies JSON for:
   - `ServiceImagesRWPolicy` (S3 images prefix R/W, DynamoDB R/W)
   - `ServiceLogsPolicy` (CloudWatch Logs)
@@ -160,7 +164,7 @@ Create `infra/permissions/policies.json` containing:
 - Frontend: `nx serve frontend` with environment variables `VITE_API_BASE_URL`, `VITE_USER_POOL_ID`, `VITE_USER_POOL_CLIENT_ID`, `VITE_CLOUDFRONT_DOMAIN`.
 - Deno API service: `nx serve api` (wrapper for `deno task dev`), runs on localhost with JWT validation against Cognito JWKS. Configure local `.env` for AWS creds or use a named AWS profile.
 - Domain restriction config for dev: set `ALLOWED_EMAIL_DOMAINS=example.com` in the API environment. Optionally set `VITE_ALLOWED_EMAIL_DOMAINS=example.com` for the frontend.
-- Pulumi: `nx run infra:up` (wrapper around `pulumi up`) against `dev` stack.
+- Pulumi: `nx run infra:up` (wrapper around `pulumi up`) against `dev` stack. Pulumi program resides in `apps/infra/`.
 
 Shared library development
 - Shared schemas/types live in `libs/shared-schemas` (or `libs/shared`), exported as ESM. Both `apps/api` (Deno) and `apps/frontend` (Vite) import from this lib.
@@ -172,11 +176,21 @@ Shared library development
   - Build and push API Docker image to ECR
   - `pulumi preview` on PR
   - On main: build site, push API image, `pulumi up` (updates infra/service), sync `site/` to S3
+  - Separate workflow: `destroy.yml` triggered manually (workflow_dispatch) that assumes the `mirrorball-destroyer` role via OIDC and runs `pulumi destroy` for the specified stack.
 
   Type safety in CI
   - Add a CI step to type-check the shared library and both apps against it (e.g., `nx run-many -t typecheck`). Fail the build if any contract drift occurs.
 
 Note: Prefer GitHub Actions for deployments over manual CLI. The plan below (Sections 12, 14, and the new Section 17) formalizes this and asks for docs alongside apps.
+
+Two-stage deployment flow
+- Stage 1 (Infra provisioning): Pulumi creates/updates all AWS resources that do not depend on CI-provided connection details: S3 bucket, CloudFront + OAC, DynamoDB, Cognito (pool + app client), ECR repo, App Runner service skeleton (can be created without final image/envs), IAM roles/policies. Outputs include ARNs and names needed by CI.
+- Stage 2 (Service wiring via CI env): GitHub Actions supplies connection/env details (e.g., image URI, `ALLOWED_EMAIL_DOMAINS`, OIDC role ARNs) as environment variables/vars at workflow time. Pulumi reads these from stack config or environment to update the App Runner service to the desired image and environment variables. This separates immutable infra from frequently changing configuration.
+
+Secrets/variables strategy
+- OIDC role ARNs: set as GitHub repository/environment variables (e.g., `AWS_ROLE_DEPLOYER_ARN`, `AWS_ROLE_DESTROYER_ARN`); referenced only by workflows, not committed in code.
+- ECR repository name/URI: Pulumi creates the ECR repository and exports `ecrRepositoryUri`. CI reads it via `pulumi stack output` or uses a mirrored GitHub variable. Image tags use the commit SHA.
+- App Runner connection: image URI and env vars (e.g., `ALLOWED_EMAIL_DOMAINS`) are provided in Stage 2; Pulumi updates the service accordingly.
 
 #### 11) Non-Functional Requirements
 - Simplicity first; prefer minimal code and least AWS services needed.
@@ -192,7 +206,7 @@ M1 — Repo bootstrap
   - Nx workspace with:
     - `apps/frontend` (Vite app)
     - `apps/api` (Deno API service)
-    - `infra/` (Pulumi program, permissions)
+    - `apps/infra/` (Pulumi program, permissions)
     - `libs/shared-schemas` (Zod schemas and inferred types for contracts)
     - `docs/` (this plan)
 - Pulumi project + stack initialized
@@ -207,8 +221,8 @@ M2 — Infra MVP
 
 M3 — API Service MVP
 - Deno service endpoints: `presign-upload`, `confirm-upload`, `list-images`, `delete-image`
-- Containerization: Dockerfile for Deno API, ECR repo, App Runner service created via Pulumi
-- IAM roles/policies attached from `infra/permissions/policies.json`
+- Containerization: Multi-stage Dockerfile for Deno API (builder + runtime), ECR repo, App Runner service created via Pulumi
+- IAM roles/policies attached from `apps/infra/permissions/policies.json`
 - Config: API reads `ALLOWED_EMAIL_DOMAINS` env and enforces domain allowlist for upload/delete
  - Contracts: API validates inputs/outputs using shared Zod schemas; on 400/403 returns a JSON error shape defined in shared lib
  - Docs: `docs/api-local-dev.md` (how to run API locally, required env vars) and `docs/api-deploy.md` (how CI deploys API)
@@ -224,9 +238,10 @@ M4 — Frontend MVP
 
 M5 — Deploy & Verify
 - Build site and sync to S3 `site/`
-- Build and push API image; `pulumi up`
+- Build and push API image; two-stage apply: (1) provision infra, (2) wire image/env and update App Runner via `pulumi up`
 - Manual verification: login as dev/admin; upload, list/search, delete
- - Docs: `docs/runbook.md` (end-to-end runbook and verification checklist)
+- Docs: `docs/runbook.md` (end-to-end runbook and verification checklist)
+ - CI: `destroy.yml` workflow present and documented; requires `mirrorball-destroyer` role to execute.
 
 #### 13) Acceptance Criteria
 - Auth works via Cognito Hosted UI; dev/admin groups enforced by API
@@ -244,16 +259,16 @@ M5 — Deploy & Verify
 1. Initialize repo structure
   - Scaffold Nx workspace at repo root (pnpm)
   - Create apps: `frontend` (Vite + React + TS), `api` (Deno HTTP service)
-  - Create `infra/` (Pulumi TS program) and `infra/permissions/`
+  - Create `apps/infra/` (Pulumi TS program) and `apps/infra/permissions/`
   - Add `.gitignore`, root `README.md` with a Docs index linking to all files in `docs/`
   - Create `libs/shared-schemas` library with Zod (`zod` as dependency) exporting schemas and inferred types
   - Create `docs/` placeholders for app-specific guides (see Section 17)
 2. Pulumi setup
-  - Init Pulumi project in `infra/` (TypeScript program)
-  - Define config schema for stack (region, domain optional)
+  - Init Pulumi project in `apps/infra/` (TypeScript program)
+  - Define config schema for stack (region default `us-west-2`, domain optional)
   - Add `allowedEmailDomains` (string list) stack config; default to `[]`. Example: `["example.com"]`
 3. Permissions
-  - Create `infra/permissions/policies.json` with the managed policies outlined
+  - Create `apps/infra/permissions/policies.json` with the managed policies outlined
 4. Core infra
   - Create S3 bucket with prefixes and block public access
   - Create CloudFront distribution with OAC; behaviors for `site/*`, `images/*`, and route `/api/*` to API origin; SPA rewrite
@@ -269,9 +284,9 @@ M5 — Deploy & Verify
   - Implement endpoints in `apps/api`
   - Add a tiny repo layer `imagesRepo.ts` using AWS SDK v3 Document Client helpers (put/get/delete/query)
   - Validate all request/response bodies using the shared Zod schemas
-  - Add Dockerfile for Deno API; create ECR repo; build and push image
+  - Add multi-stage Dockerfile for Deno API (Stage 1: build; Stage 2: slim runtime). Create ECR repo; build and push image
   - Create App Runner service (or ECS Fargate) with execution role attached
-  - Wire Pulumi stack config `allowedEmailDomains` to App Runner/ECS service environment variable `ALLOWED_EMAIL_DOMAINS` (join list by comma)
+  - Wire Pulumi stack config `allowedEmailDomains` to App Runner/ECS service environment variable `ALLOWED_EMAIL_DOMAINS` (join list by comma); if empty or unset, the API will not apply any email-domain restriction.
   - Export `apiBaseUrl`
   - Write `docs/api-local-dev.md` and `docs/api-deploy.md` (include a back-link to the root `README.md` at the top of each)
 8. IAM wiring
@@ -287,20 +302,20 @@ M5 — Deploy & Verify
   - Build script to publish to S3 `site/`
   - Write `docs/frontend-local-dev.md` and `docs/frontend-deploy.md` (each must include a back-link to the root `README.md`)
 10. Deploy & test
-  - Build and push API image; `pulumi up` for `dev`
+  - Build and push API image; perform two-stage deployment:
+    - Stage 1: Provision/update core infra via `pulumi up` (resources only)
+    - Stage 2: Update service wiring via `pulumi up` providing image URI and env vars from CI (e.g., `ALLOWED_EMAIL_DOMAINS`)
   - Upload site assets to S3 `site/`
   - Manual test scenarios for dev and admin
   - Write `docs/runbook.md` (checklist for verification; include a back-link to the root `README.md`)
+  - Add `destroy.yml` workflow using OIDC to assume `mirrorball-destroyer` and run `pulumi destroy` (document in `docs/ci-cd.md` and `docs/infra-setup.md`).
 
 #### 15) Open Questions / Decisions to Confirm
 - Keep single bucket with `site/` and `images/` prefixes vs separate buckets? (Plan assumes single bucket.)
 - Use Hosted UI redirect URIs tied to CloudFront domain only, or also localhost for dev? (Recommend both.)
 - Do we need full-text search on metadata? (Plan assumes simple filters/prefix scans.)
-- Prefer App Runner in target region; fallback to ECS Fargate if App Runner is unavailable.
- - Which domain control approach do you prefer initially?
-   - A: API-only allowlist (fastest; controlled via `allowedEmailDomains` config)
-   - B: Federated login with Google Workspace OIDC restricted to company domain (identity-layer enforcement; no native signup)
-   - C: Disable self-registration and manually invite/create users with company emails in the user pool (no code, manual admin step)
+- Prefer App Runner in target region; fallback to ECS Fargate if App Runner is unavailable. DECISION: Use App Runner in `us-west-2`.
+- Domain control approach: DECISION — Option A (API-only allowlist via `allowedEmailDomains`). Behavior: if unset/empty, no restriction.
  - DynamoDB data access:
    - Start with minimal helpers + Zod at edges (recommended for MVP), or adopt a library now?
    - If library: prefer DynamoDB Toolbox for ergonomics; confirm Deno compatibility in your environment.
@@ -315,11 +330,13 @@ M5 — Deploy & Verify
   - `docs/infra-setup.md`
     - Pulumi stack config keys (region, allowedEmailDomains, etc.)
     - AWS requirements: IAM roles, OIDC trust for GitHub Actions, permissions boundaries if any
+    - Two roles via OIDC: `mirrorball-deployer` (deploy/update) and `mirrorball-destroyer` (destroy). Detail least-privilege policies and guardrails.
     - How CI uses Pulumi (no local CLI required)
   - `docs/ci-cd.md`
     - GitHub Actions workflows overview
     - OIDC-based AWS auth (no long-lived secrets), required repo/environment secrets
-    - Job steps for: build frontend, build/push API image to ECR, `pulumi preview` on PR, `pulumi up` on main
+    - Job steps for: build frontend, build/push API image to ECR, `pulumi preview` on PR, two-stage deploy on main (Stage 1 infra, Stage 2 wiring)
+    - Destroy workflow: manual trigger (`workflow_dispatch`), assumes `mirrorball-destroyer`, runs `pulumi destroy` safely.
   - `docs/api-local-dev.md`
     - How to run the Deno API locally, env vars, token testing, example curl commands
   - `docs/api-deploy.md`

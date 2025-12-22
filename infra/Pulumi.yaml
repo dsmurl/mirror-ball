@@ -1,0 +1,3 @@
+name: mirrorball-infra
+runtime: nodejs
+description: Mirrorball infrastructure (S3, CloudFront, Cognito, DynamoDB, App Runner)
