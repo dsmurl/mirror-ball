@@ -2,13 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "module": "ESNext",
+    "module": "CommonJS",
     "target": "ES2020",
     "moduleResolution": "Node",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "strict": true,
-    "types": ["node"]
+    "types": ["node"],
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules", "dist"]

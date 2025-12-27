@@ -1,7 +1,7 @@
 export default function App() {
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", padding: 24 }}>
-      <h1>Mirrorball</h1>
+      <h1>mirror-ball</h1>
       <p>Simple image upload/list site with role-based access.</p>
       <h3>Env</h3>
       <ul>

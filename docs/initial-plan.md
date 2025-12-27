@@ -1,4 +1,4 @@
-### Mirrorball — Initial Project Plan (for Junie AI agent)
+### mirror-ball — Initial Project Plan (for Junie AI agent)
 
 #### 1) Objectives and Scope
 
@@ -134,7 +134,7 @@ UX note for domain restriction
 Stacks: `dev` (default)
 Resources:
 
-- S3 bucket: `mirrorball-bucket`
+- S3 bucket: `mirror-ball-bucket`
   - Folders (prefixes): `site/`, `images/`
   - Block public access; enforce CloudFront OAC for reads
 - CloudFront distribution
@@ -159,8 +159,8 @@ Resources:
   - ECR pull permissions for the service
   - CloudFront OAC permissions to S3
   - Two GitHub OIDC deploy roles:
-    - `mirrorball-deployer` — permissions to deploy/update (Pulumi up), build/push images, sync site.
-    - `mirrorball-destroyer` — permissions to destroy the stack (Pulumi destroy). Use only in a dedicated GitHub Action workflow.
+    - `mirror-ball-creator` — permissions to deploy/update (Pulumi up), build/push images, sync site.
+    - `mirror-ball-destroyer` — permissions to destroy the stack (Pulumi destroy). Use only in a dedicated GitHub Action workflow.
 
 Outputs:
 
@@ -194,7 +194,7 @@ Create `apps/infra/permissions/policies.json` containing:
 Shared library development
 
 - Shared schemas/types live in `libs/shared-schemas` (or `libs/shared`), exported as ESM. Both `apps/api` (Bun) and `apps/frontend` (Vite) import from this lib.
-- Ensure `tsconfig` path mappings or Nx project references are set so imports like `@mirrorball/shared-schemas` resolve in both apps.
+- Ensure `tsconfig` path mappings or Nx project references are set so imports like `@mirror-ball/shared-schemas` resolve in both apps.
 
 #### 10) CI/CD (minimal)
 
@@ -203,7 +203,7 @@ Shared library development
   - Build and push API Docker image to ECR
   - `pulumi preview` on PR
   - On main: build site, push API image, `pulumi up` (updates infra/service), sync `site/` to S3
-  - Separate workflow: `destroy.yml` triggered manually (workflow_dispatch) that assumes the `mirrorball-destroyer` role via OIDC and runs `pulumi destroy` for the specified stack.
+  - Separate workflow: `destroy.yml` triggered manually (workflow_dispatch) that assumes the `mirror-ball-destroyer` role via OIDC and runs `pulumi destroy` for the specified stack.
 
   Type safety in CI
   - Add a CI step to type-check the shared library and both apps against it (e.g., `nx run-many -t typecheck`). Fail the build if any contract drift occurs.
@@ -277,7 +277,7 @@ M5 — Deploy & Verify
 - Build and push API image; two-stage apply: (1) provision infra, (2) wire image/env and update App Runner via `pulumi up`
 - Manual verification: login as dev/admin; upload, list/search, delete
 - Docs: `docs/runbook.md` (end-to-end runbook and verification checklist)
-- CI: `destroy.yml` workflow present and documented; requires `mirrorball-destroyer` role to execute.
+- CI: `destroy.yml` workflow present and documented; requires `mirror-ball-destroyer` role to execute.
 
 #### 13) Acceptance Criteria
 
@@ -343,7 +343,7 @@ M5 — Deploy & Verify
 
 8. IAM wiring
 
-- Create execution role for the service and attach policies from `infra/permissions/policies.json`
+- Create execution role for the service and attach policies from `apps/infra/permissions/policies.json`
 - Configure CloudFront OAC permissions for bucket
 
 9. Frontend app
@@ -365,7 +365,7 @@ M5 — Deploy & Verify
 - Upload site assets to S3 `site/`
 - Manual test scenarios for dev and admin
 - Write `docs/runbook.md` (checklist for verification; include a back-link to the root `README.md`)
-- Add `destroy.yml` workflow using OIDC to assume `mirrorball-destroyer` and run `pulumi destroy` (document in `docs/ci-cd.md` and `docs/infra-setup.md`).
+- Add `destroy.yml` workflow using OIDC to assume `mirror-ball-destroyer` and run `pulumi destroy` (document in `docs/ci-cd.md` and `docs/infra-setup.md`).
 
 #### 15) Open Questions / Decisions to Confirm
 
@@ -389,13 +389,13 @@ M5 — Deploy & Verify
   - `docs/infra-setup.md`
     - Pulumi stack config keys (region, allowedEmailDomains, etc.)
     - AWS requirements: IAM roles, OIDC trust for GitHub Actions, permissions boundaries if any
-    - Two roles via OIDC: `mirrorball-deployer` (deploy/update) and `mirrorball-destroyer` (destroy). Detail least-privilege policies and guardrails.
+    - Two roles via OIDC: `mirror-ball-creator` (deploy/update) and `mirror-ball-destroyer` (destroy). Detail least-privilege policies and guardrails.
     - How CI uses Pulumi (no local CLI required)
   - `docs/ci-cd.md`
     - GitHub Actions workflows overview
     - OIDC-based AWS auth (no long-lived secrets), required repo/environment secrets
     - Job steps for: build frontend, build/push API image to ECR, `pulumi preview` on PR, two-stage deploy on main (Stage 1 infra, Stage 2 wiring)
-    - Destroy workflow: manual trigger (`workflow_dispatch`), assumes `mirrorball-destroyer`, runs `pulumi destroy` safely.
+    - Destroy workflow: manual trigger (`workflow_dispatch`), assumes `mirror-ball-destroyer`, runs `pulumi destroy` safely.
   - `docs/api-local-dev.md`
     - How to run the Bun API locally, env vars, token testing, example curl commands
   - `docs/api-deploy.md`

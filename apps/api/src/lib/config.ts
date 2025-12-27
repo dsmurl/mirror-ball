@@ -1,0 +1,10 @@
+export const PORT = Number(process.env.PORT ?? 8080);
+export const REGION = process.env.AWS_REGION ?? "us-west-2";
+export const BUCKET_NAME = process.env.BUCKET_NAME ?? "";
+export const TABLE_NAME = process.env.TABLE_NAME ?? "";
+export const USER_POOL_ID = process.env.USER_POOL_ID ?? "";
+export const ALLOWED_EMAIL_DOMAINS = (process.env.ALLOWED_EMAIL_DOMAINS ?? "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+export const CLOUDFRONT_DOMAIN = process.env.CLOUDFRONT_DOMAIN;

@@ -2,7 +2,7 @@ Back to [root README](../README.md)
 
 # API — deploy (via GitHub Actions)
 
-The API is containerized and deployed to AWS App Runner in `us-west-2`. Deployments run through GitHub Actions using OIDC to assume the `mirrorball-deployer` role.
+The API is containerized and deployed to AWS App Runner in `us-west-2`. Deployments run through GitHub Actions using OIDC to assume the `mirror-ball-creator` role.
 
 ## What the workflow does (planned)
 
@@ -18,7 +18,7 @@ The API is containerized and deployed to AWS App Runner in `us-west-2`. Deployme
 
 ## GitHub secrets/vars
 
-- None for AWS keys; OIDC is used. Configure the `mirrorball-deployer` IAM role trust policy for your repo and reference it in the workflow.
+- None for AWS keys; OIDC is used. Configure the `mirror-ball-creator` IAM role trust policy for your repo and reference it in the workflow.
 
 See also:
 

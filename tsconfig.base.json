@@ -7,7 +7,7 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@mirrorball/shared-schemas/*": ["libs/shared-schemas/src/*"]
+      "@mirror-ball/shared-schemas/*": ["libs/shared-schemas/src/*"]
     },
     "types": ["bun"],
     "allowImportingTsExtensions": true,

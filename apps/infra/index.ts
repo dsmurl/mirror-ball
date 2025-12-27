@@ -1,23 +1,27 @@
+import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
+
 // Config
 const config = new pulumi.Config();
-const region = config.get("region") ?? "us-west-2";
+const awsConfig = new pulumi.Config("aws");
+const region = awsConfig.require("region");
 const allowedEmailDomains = config.getObject<string[]>("allowedEmailDomains") ?? [];
-const commonTags: aws.types.input.tags.TagArgs = {
-  project: "mirrorball",
+const commonTags = {
+  project: "mirror-ball",
   managedBy: "pulumi",
   environment: pulumi.getStack(),
 };
 const imageTag = config.get("imageTag") ?? "bootstrap"; // CI sets this in Stage 2
 
 // 1) S3 bucket (private) with prefixes for site/ and images/
-const bucket = new aws.s3.Bucket("mirrorballBucket", {
-  bucketPrefix: "mirrorball-",
+const bucket = new aws.s3.Bucket("mirror-ballBucket", {
+  bucketPrefix: "mirror-ball-",
   forceDestroy: false,
   tags: commonTags,
 });
 
 // Block all public ACLs/policies; access will be via CloudFront OAC (to be added in a subsequent step)
-const bucketPublicAccess = new aws.s3.BucketPublicAccessBlock("mirrorballBucketPab", {
+const bucketPublicAccess = new aws.s3.BucketPublicAccessBlock("mirror-ballBucketPab", {
   bucket: bucket.id,
   blockPublicAcls: true,
   blockPublicPolicy: true,
@@ -26,7 +30,7 @@ const bucketPublicAccess = new aws.s3.BucketPublicAccessBlock("mirrorballBucketP
 });
 
 // 2) DynamoDB table (on-demand)
-const imagesTable = new aws.dynamodb.Table("mirrorballImagesTable", {
+const imagesTable = new aws.dynamodb.Table("mirror-ballImagesTable", {
   attributes: [{ name: "imageId", type: "S" }],
   hashKey: "imageId",
   billingMode: "PAY_PER_REQUEST",
@@ -34,8 +38,8 @@ const imagesTable = new aws.dynamodb.Table("mirrorballImagesTable", {
 });
 
 // 3) Cognito User Pool and App Client (Hosted UI domain can be added later)
-const userPool = new aws.cognito.UserPool("mirrorballUserPool", {
-  schema: [{ attributeDataType: "String", name: "email", required: true, mutable: true }],
+const userPool = new aws.cognito.UserPool("mirror-ballUserPool", {
+  schemas: [{ attributeDataType: "String", name: "email", required: true, mutable: true }],
   autoVerifiedAttributes: ["email"],
   adminCreateUserConfig: {
     allowAdminCreateUserOnly: false,
@@ -43,7 +47,7 @@ const userPool = new aws.cognito.UserPool("mirrorballUserPool", {
   tags: commonTags,
 });
 
-const userPoolClient = new aws.cognito.UserPoolClient("mirrorballUserPoolClient", {
+const userPoolClient = new aws.cognito.UserPoolClient("mirror-ballUserPoolClient", {
   userPoolId: userPool.id,
   generateSecret: false,
   allowedOauthFlows: ["code"],
@@ -59,21 +63,21 @@ const userPoolClient = new aws.cognito.UserPoolClient("mirrorballUserPoolClient"
 });
 
 // User groups: dev and admin
-const devGroup = new aws.cognito.UserGroup("mirrorballDevGroup", {
+const devGroup = new aws.cognito.UserGroup("mirror-ballDevGroup", {
   userPoolId: userPool.id,
   name: "dev",
   precedence: 10,
 });
 
-const adminGroup = new aws.cognito.UserGroup("mirrorballAdminGroup", {
+const adminGroup = new aws.cognito.UserGroup("mirror-ballAdminGroup", {
   userPoolId: userPool.id,
   name: "admin",
   precedence: 5,
 });
 
 // 4) ECR repository for API images
-const ecrRepo = new aws.ecr.Repository("mirrorballApiRepository", {
-  name: pulumi.interpolate`mirrorball-api-${pulumi.getStack()}`,
+const ecrRepo = new aws.ecr.Repository("mirror-ballApiRepository", {
+  name: pulumi.interpolate`mirror-ball-api-${pulumi.getStack()}`,
   imageScanningConfiguration: { scanOnPush: true },
   tags: commonTags,
 });
@@ -89,12 +93,12 @@ export const userPoolClientId = userPoolClient.id;
 export const ecrRepositoryUri = ecrRepo.repositoryUrl;
 export const allowedDomains = pulumi.output(allowedEmailDomains);
 // Placeholder (set after distribution is created below)
-export const cloudFrontDomainName = pulumi.output("<pending>");
+// export const cloudFrontDomainName = pulumi.output("<pending>");
 // 6) App Runner service (Stage 1 skeleton) — image tag will be updated by CI in Stage 2
 
 // IAM role for App Runner to pull from ECR
-const appRunnerAccessRole = new aws.iam.Role("mirrorballAppRunnerAccessRole", {
-  name: pulumi.interpolate`mirrorball-apprunner-access-${pulumi.getStack()}`,
+const appRunnerAccessRole = new aws.iam.Role("mirror-ballAppRunnerAccessRole", {
+  name: pulumi.interpolate`mirror-ball-apprunner-access-${pulumi.getStack()}`,
   assumeRolePolicy: aws.iam.getPolicyDocumentOutput({
     statements: [
       {
@@ -118,14 +122,14 @@ const appRunnerAccessRole = new aws.iam.Role("mirrorballAppRunnerAccessRole", {
 
 // Attach a managed policy for ECR pull (and logs)
 const appRunnerAccessPolicy = new aws.iam.RolePolicyAttachment(
-  "mirrorballAppRunnerAccessAttachment",
+  "mirror-ballAppRunnerAccessAttachment",
   {
     role: appRunnerAccessRole.name,
-    policyArn: aws.iam.ManagedPolicies.AmazonEC2ContainerRegistryReadOnly,
+    policyArn: aws.iam.ManagedPolicy.AmazonEC2ContainerRegistryReadOnly,
   },
 );
 
-const appRunnerLogsPolicy = new aws.iam.RolePolicy("mirrorballAppRunnerLogsPolicy", {
+const appRunnerLogsPolicy = new aws.iam.RolePolicy("mirror-ballAppRunnerLogsPolicy", {
   role: appRunnerAccessRole.id,
   policy: aws.iam.getPolicyDocumentOutput({
     statements: [
@@ -145,55 +149,57 @@ const appRunnerLogsPolicy = new aws.iam.RolePolicy("mirrorballAppRunnerLogsPolic
 
 const imageIdentifier = pulumi.interpolate`${ecrRepo.repositoryUrl}:${imageTag}`;
 
-const appRunnerService = new aws.apprunner.Service("mirrorballApiService", {
-  serviceName: pulumi.interpolate`mirrorball-api-${pulumi.getStack()}`,
-  sourceConfiguration: {
-    authenticationConfiguration: { accessRoleArn: appRunnerAccessRole.arn },
-    imageRepository: {
-      imageRepositoryType: "ECR",
-      imageIdentifier: imageIdentifier,
-      imageConfiguration: {
-        port: "8080",
-        runtimeEnvironmentVariables: [
-          {
-            name: "ALLOWED_EMAIL_DOMAINS",
-            value: pulumi
+const appRunnerService = new aws.apprunner.Service(
+  "mirror-ballApiService",
+  {
+    serviceName: pulumi.interpolate`mirror-ball-api-${pulumi.getStack()}`,
+    sourceConfiguration: {
+      authenticationConfiguration: { accessRoleArn: appRunnerAccessRole.arn },
+      imageRepository: {
+        imageRepositoryType: "ECR",
+        imageIdentifier: imageIdentifier,
+        imageConfiguration: {
+          port: "8080",
+          runtimeEnvironmentVariables: {
+            ALLOWED_EMAIL_DOMAINS: pulumi
               .output(allowedEmailDomains)
               .apply((arr) => (arr && arr.length ? arr.join(",") : "")),
+            AWS_REGION: region,
+            BUCKET_NAME: bucket.bucket,
+            TABLE_NAME: imagesTable.name,
+            USER_POOL_ID: userPool.id,
+            CLOUDFRONT_DOMAIN: cfDistribution.domainName,
           },
-          { name: "AWS_REGION", value: region },
-          { name: "BUCKET_NAME", value: bucket.bucket },
-          { name: "TABLE_NAME", value: imagesTable.name },
-          { name: "USER_POOL_ID", value: userPool.id },
-          // CloudFront domain gets set after distribution creation; CI can re-run Stage 2 to update if needed
-        ],
+        },
       },
+      autoDeploymentsEnabled: true,
     },
-    autoDeploymentsEnabled: true,
+    healthCheckConfiguration: {
+      protocol: "HTTP",
+      path: "/api/health",
+      interval: 10,
+      timeout: 5,
+      healthyThreshold: 1,
+      unhealthyThreshold: 5,
+    },
+    instanceConfiguration: {
+      cpu: "1024",
+      memory: "2048",
+      instanceRoleArn: appRunnerInstanceRole.arn,
+    },
+    tags: commonTags,
   },
-  healthCheckConfiguration: {
-    protocol: "HTTP",
-    path: "/api/health",
-    interval: 10,
-    timeout: 5,
-    healthyThreshold: 1,
-    unhealthyThreshold: 5,
-  },
-  instanceConfiguration: {
-    cpu: "1024",
-    memory: "2048",
-  },
-  tags: commonTags,
-});
+  { dependsOn: [appRunnerInstanceAccess] },
+);
 
 export const apiBaseUrl = appRunnerService.serviceUrl;
 
 // 5) CloudFront OAC + Distribution (serves site/ and images/ + routes /api/* to App Runner)
 
 // Origin Access Control for S3
-const oac = new aws.cloudfront.OriginAccessControl("mirrorballOac", {
-  name: pulumi.interpolate`mirrorball-oac-${pulumi.getStack()}`,
-  description: "OAC for S3 origin (mirrorball)",
+const oac = new aws.cloudfront.OriginAccessControl("mirror-ballOac", {
+  name: pulumi.interpolate`mirror-ball-oac-${pulumi.getStack()}`,
+  description: "OAC for S3 origin (mirror-ball)",
   originAccessControlOriginType: "s3",
   signingBehavior: "always",
   signingProtocol: "sigv4",
@@ -202,9 +208,9 @@ const oac = new aws.cloudfront.OriginAccessControl("mirrorballOac", {
 // Build CloudFront distribution with two origins: S3 and App Runner
 const apiDomain = appRunnerService.serviceUrl.apply((u) => new URL(u).host);
 
-const cfDistribution = new aws.cloudfront.Distribution("mirrorballCdn", {
+const cfDistribution = new aws.cloudfront.Distribution("mirror-ballCdn", {
   enabled: true,
-  comment: pulumi.interpolate`mirrorball cdn (${pulumi.getStack()})`,
+  comment: pulumi.interpolate`mirror-ball cdn (${pulumi.getStack()})`,
   origins: [
     {
       originId: "s3-origin",
@@ -216,6 +222,7 @@ const cfDistribution = new aws.cloudfront.Distribution("mirrorballCdn", {
       domainName: apiDomain,
       customOriginConfig: {
         originProtocolPolicy: "https-only",
+        httpPort: 80,
         httpsPort: 443,
         originSslProtocols: ["TLSv1.2"],
       },
@@ -265,9 +272,9 @@ const cfDistribution = new aws.cloudfront.Distribution("mirrorballCdn", {
 });
 
 // Bucket policy to allow CloudFront OAC to read objects
-const bucketPolicy = new aws.s3.BucketPolicy("mirrorballBucketPolicy", {
+const bucketPolicy = new aws.s3.BucketPolicy("mirror-ballBucketPolicy", {
   bucket: bucket.bucket,
-  policy: pulumi.all(bucket.arn, cfDistribution.arn).apply(([bArn, distArn]) =>
+  policy: pulumi.all([bucket.arn, cfDistribution.arn]).apply(([bArn, distArn]) =>
     JSON.stringify({
       Version: "2012-10-17",
       Statement: [
@@ -288,9 +295,9 @@ const bucketPolicy = new aws.s3.BucketPolicy("mirrorballBucketPolicy", {
 export const cloudFrontDomainName = cfDistribution.domainName;
 export const cloudFrontDistributionId = cfDistribution.id;
 
-// IAM role for App Runner instances to access AWS resources (S3/DynamoDB)
-const appRunnerInstanceRole = new aws.iam.Role("mirrorballAppRunnerInstanceRole", {
-  name: pulumi.interpolate`mirrorball-apprunner-instance-${pulumi.getStack()}`,
+// 6) App Runner instance role & policies
+const appRunnerInstanceRole = new aws.iam.Role("mirror-ballAppRunnerInstanceRole", {
+  name: pulumi.interpolate`mirror-ball-apprunner-instance-${pulumi.getStack()}`,
   assumeRolePolicy: aws.iam.getPolicyDocumentOutput({
     statements: [
       {
@@ -308,7 +315,7 @@ const appRunnerInstanceRole = new aws.iam.Role("mirrorballAppRunnerInstanceRole"
   tags: commonTags,
 });
 
-const appRunnerInstanceAccess = new aws.iam.RolePolicy("mirrorballAppRunnerInstanceAccess", {
+const appRunnerInstanceAccess = new aws.iam.RolePolicy("mirror-ballAppRunnerInstanceAccess", {
   role: appRunnerInstanceRole.id,
   policy: pulumi.all([bucket.arn, imagesTable.arn]).apply(([bArn, tArn]) =>
     JSON.stringify({
@@ -348,43 +355,3 @@ const appRunnerInstanceAccess = new aws.iam.RolePolicy("mirrorballAppRunnerInsta
     }),
   ),
 });
-
-// Update App Runner service to use the instance role (dependsOn ensures role exists first)
-const appRunnerServiceConfig = new aws.apprunner.Service(
-  "mirrorballApiServiceConfig",
-  {
-    serviceName: appRunnerService.serviceName,
-    sourceConfiguration: {
-      authenticationConfiguration: { accessRoleArn: appRunnerAccessRole.arn },
-      imageRepository: {
-        imageRepositoryType: "ECR",
-        imageIdentifier: imageIdentifier,
-        imageConfiguration: {
-          port: "8080",
-          runtimeEnvironmentVariables: [
-            {
-              name: "ALLOWED_EMAIL_DOMAINS",
-              value: pulumi
-                .output(allowedEmailDomains)
-                .apply((arr) => (arr && arr.length ? arr.join(",") : "")),
-            },
-            { name: "AWS_REGION", value: region },
-            { name: "BUCKET_NAME", value: bucket.bucket },
-            { name: "TABLE_NAME", value: imagesTable.name },
-            { name: "USER_POOL_ID", value: userPool.id },
-            { name: "CLOUDFRONT_DOMAIN", value: cfDistribution.domainName },
-          ],
-        },
-      },
-      autoDeploymentsEnabled: true,
-    },
-    healthCheckConfiguration: appRunnerService.healthCheckConfiguration,
-    instanceConfiguration: {
-      cpu: "1024",
-      memory: "2048",
-      instanceRoleArn: appRunnerInstanceRole.arn,
-    },
-    tags: commonTags,
-  },
-  { dependsOn: [appRunnerService, appRunnerInstanceAccess] },
-);

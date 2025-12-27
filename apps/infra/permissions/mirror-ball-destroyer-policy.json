@@ -1,0 +1,21 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:*",
+        "apprunner:*",
+        "s3:*",
+        "cloudfront:*",
+        "dynamodb:*",
+        "cognito-idp:*",
+        "iam:*",
+        "acm:*",
+        "route53:*",
+        "logs:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

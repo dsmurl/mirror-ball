@@ -1,4 +1,4 @@
-# Mirrorball
+# Mirror-ball
 
 Simple image upload and listing site with role-based access, built as an Nx monorepo. Frontend (Vite) and backend (Deno) share Zod schemas. Infra is provisioned with Pulumi on AWS (S3, CloudFront, Cognito, DynamoDB, App Runner).
 
@@ -6,6 +6,7 @@ Simple image upload and listing site with role-based access, built as an Nx mono
 
 - [Initial plan](docs/initial-plan.md)
 - [Infra setup](docs/infra-setup.md)
+- [AWS Access with Granted](docs/aws-granted-setup.md)
 - [CI/CD](docs/ci-cd.md)
 - [API — local development](docs/api-local-dev.md)
 - [API — deploy](docs/api-deploy.md)

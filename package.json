@@ -1,5 +1,5 @@
 {
-  "name": "mirrorball",
+  "name": "mirror-ball",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,15 +13,18 @@
     "prettier:check": "prettier . --check"
   },
   "devDependencies": {
-    "nx": "22.3.3",
-    "prettier": "^3.3.3",
+    "@types/node": "^25.0.3",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.3.1",
+    "nx": "22.3.3",
+    "prettier": "^3.3.3",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"
   },
   "dependencies": {
+    "@pulumi/aws": "^7.15.0",
+    "@pulumi/pulumi": "^3.213.0",
     "@types/bun": "latest",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -66,3 +66,6 @@ libs/prisma/prisma/data/
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite-journal
+
+# ai output
+.output.txt
