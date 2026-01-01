@@ -21,7 +21,7 @@ This guide explains how to run the Bun API locally, configure env vars, and test
 ## Run
 
 ```
-pnpm nx serve api
+pnpm nx run api:dev
 ```
 
 This runs `bun --watch apps/api/src/main.ts` under `apps/api` (via Nx) and serves on `http://localhost:8080`.

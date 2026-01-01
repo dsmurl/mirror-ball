@@ -9,7 +9,7 @@ Back to [root README](../README.md)
 ## Run
 
 ```
-pnpm nx serve web
+pnpm nx run web:dev
 ```
 
 Serves on `http://localhost:5173` by default.

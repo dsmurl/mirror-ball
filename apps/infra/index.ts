@@ -364,3 +364,4 @@ const bucketPolicy = new aws.s3.BucketPolicy("mirror-ballBucketPolicy", {
 // Update outputs now that CloudFront is created
 export const cloudFrontDomainName = cfDistribution.domainName;
 export const cloudFrontDistributionId = cfDistribution.id;
+export const tableName = imagesTable.name;

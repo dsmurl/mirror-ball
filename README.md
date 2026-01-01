@@ -40,7 +40,7 @@ pnpm install
 2. Start the API (Bun)
 
 ```
-pnpm nx serve api
+pnpm nx run api:dev
 ```
 
 Environment variables commonly used by the API:
@@ -54,10 +54,12 @@ Environment variables commonly used by the API:
 3. Start the web app (Vite)
 
 ```
-pnpm nx serve web
+pnpm nx run web:dev
 ```
 
 Recommended `.env` in `apps/web/` (or export in your shell):
+
+You can get these from Pulumi outputsm from the AWS console, or `pnpm pulumi stack output`.
 
 - `VITE_API_BASE_URL` — e.g., `http://localhost:8080/api` (local) or `https://<cloudfront-domain>/api`
 - `VITE_USER_POOL_ID` — Pulumi output
