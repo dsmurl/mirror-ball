@@ -64,6 +64,7 @@ You can get these from Pulumi outputsm from the AWS console, or `pnpm pulumi sta
 - `VITE_API_BASE_URL` — e.g., `http://localhost:8080/api` (local) or `https://<cloudfront-domain>/api`
 - `VITE_USER_POOL_ID` — Pulumi output
 - `VITE_USER_POOL_CLIENT_ID` — Pulumi output
+- `VITE_COGNITO_DOMAIN` — Pulumi output
 - `VITE_CLOUDFRONT_DOMAIN` — CloudFront domain (for image/public URLs)
 - `VITE_ALLOWED_EMAIL_DOMAINS` — optional; UI hint only
 

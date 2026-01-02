@@ -149,33 +149,94 @@ If you want to run it locally:
     ```bash
     pulumi up
     ```
-    _Note: This first deployment will likely fail on the App Runner service because the ECR repository is empty. This is expected. Follow the "Bootstrapping ECR" steps below to fix it._
+    _Note: To avoid the "bootstrap" failure below, you can perform a "Skeleton Deploy" first (see section 7)._
 
-### 7. Bootstrapping ECR (First Time Only)
+### 7. Skeleton Deploy (Recommended for first-time setup)
 
-App Runner cannot start without an image in ECR. Since your ECR repository was just created by Pulumi, it is currently empty.
+To avoid the "Chicken and Egg" problem where App Runner fails because your ECR is empty, you can deploy a placeholder image first:
+
+1.  **Enable Skeleton Mode**:
+    ```bash
+    pulumi config set usePublicImage true
+    ```
+2.  **Deploy**:
+    ```bash
+    pulumi up
+    ```
+    This will use a public Nginx image to build your entire infrastructure (S3, CloudFront, Cognito) without needing your local code or Docker.
+
+    *Note on Health Checks:* Pulumi is configured to use a static **HTTP health check** on the root path (`/`). Since the standard Nginx image returns a 200 OK on `/` and our API is also configured to handle `/`, the health check will pass for both the placeholder and your real application without needing to change the infrastructure configuration.
+
+3.  **Deploy your real API**:
+    Once the infrastructure is up, you must follow **Section 8** to build and push your real API image with the `:bootstrap` tag, then disable Skeleton Mode.
+
+### 8. Bootstrapping ECR (First Real API Image)
+
+App Runner cannot start your actual API without an image in ECR. While Skeleton Mode uses Nginx, you need to push your real application code to ECR using the `:bootstrap` tag to complete the setup.
+
+**Note:** This step is only required if you want to deploy the first real image **manually from your local machine**. If you prefer, you can skip this manual push and let **GitHub Actions** handle the first real deployment by pushing your code to the `main` branch (after the infrastructure from Section 7 is up).
 
 1.  **Get your ECR repository URL** from the Pulumi outputs:
-    Get the ECR repository URI from the Pulumi site when you login and view it in the stack
+    Get the ECR repository URI from the Pulumi site when you login and view it in the stack.
 2.  **Authenticate Docker to AWS** (replace `<REGION>` and `<ACCOUNT_ID>`):
     ```bash
     assume   # your aws role
     aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
     ```
-3.  **Build and push a "bootstrap" image**:
-    You can use the provided API code to build the image. From the project root:
+3.  **Build and push the "bootstrap" image**:
+    This is your real API code, tagged as `bootstrap` so Pulumi can find it by default. From the project root:
     ```bash
     docker build -t mirror-ball-api -f apps/api/Dockerfile .
     docker tag mirror-ball-api:latest <ECR_REPOSITORY_URI>:bootstrap
     docker push <ECR_REPOSITORY_URI>:bootstrap
     ```
-4.  **Finish the Deployment**:
-    Now that the image exists, run Pulumi again:
+4.  **Switch from Skeleton to Real API**:
+    If you used Skeleton Mode, now tell Pulumi to use your real image:
     ```bash
     cd apps/infra
+    pulumi config set usePublicImage false
     pulumi up
     ```
+
+### 9. User Permissions (First Time Only)
+
+By default, new users in Cognito do not have any permissions. You must manually add your user to a group to use the upload features:
+
+1.  Log in to the **AWS Console**.
+2.  Go to **Cognito** -> **User Pools** -> Select your pool (e.g., `mirror-ball-user-pool-dev`).
+3.  Click on **Users** in the left sidebar.
+4.  Select your user (the one you used to log in to the web app).
+5.  Scroll down to **Group memberships** and click **Add user to group**.
+6.  Select **dev** (or **admin**) and click **Add**.
+7.  **IMPORTANT**: You must **Logout** and **Login** again in the web app for the new permissions to take effect.
 
 ## Pulumi usage via CI
 
 CI authenticates with AWS via OIDC and runs `pulumi preview` on PRs and `pulumi up` on main. No local Pulumi CLI is required to deploy.
+
+## Troubleshooting
+
+### App Runner Service in `CREATE_FAILED` State
+
+If `pulumi up` fails with an error stating that the App Runner service is in an unexpected state `CREATE_FAILED`, it means the service reached a terminal failure state. AWS does not allow updating a service in this state; it must be deleted and recreated.
+
+**Steps to Resolve:**
+
+1.  **Delete the service manually** (via AWS Console or CLI):
+    ```bash
+    aws apprunner delete-service --service-arn <SERVICE_ARN> --region <REGION>
+    ```
+2.  **Synchronize Pulumi state**:
+    ```bash
+    cd apps/infra
+    pulumi refresh
+    ```
+    *(Select **yes** to remove the missing resource from your state).*
+3.  **Redeploy**:
+    ```bash
+    pulumi up
+    ```
+
+### Missing ECR Image
+
+If App Runner fails to start with a "Health check failed" or "Image pull error," ensure you have pushed the `bootstrap` image to ECR as described in [Section 8](#8-bootstrapping-ecr-for-your-real-api).

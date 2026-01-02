@@ -20,6 +20,20 @@ const bucket = new aws.s3.Bucket("mirror-ballBucket", {
   tags: commonTags,
 });
 
+// Add CORS configuration to the bucket to allow pre-signed uploads from the web app
+const bucketCors = new aws.s3.BucketCorsConfiguration("mirror-ballBucketCors", {
+  bucket: bucket.id,
+  corsRules: [
+    {
+      allowedHeaders: ["*"],
+      allowedMethods: ["PUT", "POST", "GET", "HEAD"],
+      allowedOrigins: ["http://localhost:5173", "https://*"], // Restrict https://* to your actual domain if possible
+      exposeHeaders: ["ETag"],
+      maxAgeSeconds: 3000,
+    },
+  ],
+});
+
 // Block all public ACLs/policies; access will be via CloudFront OAC (to be added in a subsequent step)
 const bucketPublicAccess = new aws.s3.BucketPublicAccessBlock("mirror-ballBucketPab", {
   bucket: bucket.id,
@@ -37,7 +51,7 @@ const imagesTable = new aws.dynamodb.Table("mirror-ballImagesTable", {
   tags: commonTags,
 });
 
-// 3) Cognito User Pool and App Client (Hosted UI domain can be added later)
+// 3) Cognito User Pool and App Client (Hosted UI domain added)
 const userPool = new aws.cognito.UserPool("mirror-ballUserPool", {
   schemas: [{ attributeDataType: "String", name: "email", required: true, mutable: true }],
   autoVerifiedAttributes: ["email"],
@@ -47,16 +61,20 @@ const userPool = new aws.cognito.UserPool("mirror-ballUserPool", {
   tags: commonTags,
 });
 
+const accountId = aws.getCallerIdentity().then((id) => id.accountId);
+
+const userPoolDomainResource = new aws.cognito.UserPoolDomain("mirror-ballUserPoolDomain", {
+  domain: pulumi.interpolate`mirror-ball-${pulumi.getStack()}-${accountId}`,
+  userPoolId: userPool.id,
+});
+
 const userPoolClient = new aws.cognito.UserPoolClient("mirror-ballUserPoolClient", {
   userPoolId: userPool.id,
   generateSecret: false,
-  allowedOauthFlows: ["code"],
+  allowedOauthFlows: ["code", "implicit"],
   allowedOauthFlowsUserPoolClient: true,
   allowedOauthScopes: ["email", "openid", "profile"],
-  callbackUrls: [
-    // localhost for dev; CloudFront domain will be appended later via update
-    "http://localhost:5173/",
-  ],
+  callbackUrls: ["http://localhost:5173/"],
   logoutUrls: ["http://localhost:5173/"],
   supportedIdentityProviders: ["COGNITO"],
   preventUserExistenceErrors: "ENABLED",
@@ -90,6 +108,9 @@ export const bucketName = bucket.bucket;
 export const tableName = imagesTable.name;
 export const userPoolId = userPool.id;
 export const userPoolClientId = userPoolClient.id;
+export const userPoolDomain = userPoolDomainResource.domain.apply(
+  (d) => `https://${d}.auth.${region}.amazoncognito.com`,
+);
 export const ecrRepositoryUri = ecrRepo.repositoryUrl;
 export const allowedDomains = pulumi.output(allowedEmailDomains);
 // Placeholder (set after distribution is created below)
@@ -218,41 +239,53 @@ const oac = new aws.cloudfront.OriginAccessControl("mirror-ballOac", {
   signingProtocol: "sigv4",
 });
 
-// App Runner service
-const imageIdentifier = pulumi.interpolate`${ecrRepo.repositoryUrl}:${imageTag}`;
+// 6) App Runner service
+const usePublicImage = config.getBoolean("usePublicImage") ?? false;
+
+const imageConfiguration: aws.types.input.apprunner.ServiceSourceConfigurationImageRepositoryImageConfiguration = {
+  port: "8080",
+  runtimeEnvironmentVariables: {
+    ALLOWED_EMAIL_DOMAINS: pulumi
+      .output(allowedEmailDomains)
+      .apply((arr: string[] | undefined) => (arr && arr.length ? arr.join(",") : "")),
+    AWS_REGION: region,
+    BUCKET_NAME: bucket.bucket,
+    TABLE_NAME: imagesTable.name,
+    USER_POOL_ID: userPool.id,
+  },
+};
+
+const sourceConfiguration: aws.types.input.apprunner.ServiceSourceConfiguration = usePublicImage
+  ? {
+      imageRepository: {
+        imageIdentifier: "public.ecr.aws/nginx/nginx:latest",
+        imageRepositoryType: "PUBLIC",
+        imageConfiguration: { port: "80" },
+      },
+      autoDeploymentsEnabled: false,
+    }
+  : {
+      authenticationConfiguration: { accessRoleArn: appRunnerAccessRole.arn },
+      imageRepository: {
+        imageRepositoryType: "ECR",
+        imageIdentifier: pulumi.interpolate`${ecrRepo.repositoryUrl}:${imageTag}`,
+        imageConfiguration: imageConfiguration,
+      },
+      autoDeploymentsEnabled: true,
+    };
 
 const appRunnerService = new aws.apprunner.Service(
   "mirror-ballApiService",
   {
     serviceName: pulumi.interpolate`mirror-ball-api-${pulumi.getStack()}`,
-    sourceConfiguration: {
-      authenticationConfiguration: { accessRoleArn: appRunnerAccessRole.arn },
-      imageRepository: {
-        imageRepositoryType: "ECR",
-        imageIdentifier: imageIdentifier,
-        imageConfiguration: {
-          port: "8080",
-          runtimeEnvironmentVariables: {
-            ALLOWED_EMAIL_DOMAINS: pulumi
-              .output(allowedEmailDomains)
-              .apply((arr: string[] | undefined) => (arr && arr.length ? arr.join(",") : "")),
-            AWS_REGION: region,
-            BUCKET_NAME: bucket.bucket,
-            TABLE_NAME: imagesTable.name,
-            USER_POOL_ID: userPool.id,
-            // CLOUDFRONT_DOMAIN: cfDistribution.domainName, // Removed to break circular dependency
-          },
-        },
-      },
-      autoDeploymentsEnabled: true,
-    },
+    sourceConfiguration: sourceConfiguration,
     healthCheckConfiguration: {
       protocol: "HTTP",
-      path: "/api/health",
-      interval: 10,
-      timeout: 5,
+      path: "/",
+      interval: 20,
+      timeout: 10,
       healthyThreshold: 1,
-      unhealthyThreshold: 5,
+      unhealthyThreshold: 10,
     },
     instanceConfiguration: {
       cpu: "1024",
@@ -364,4 +397,7 @@ const bucketPolicy = new aws.s3.BucketPolicy("mirror-ballBucketPolicy", {
 // Update outputs now that CloudFront is created
 export const cloudFrontDomainName = cfDistribution.domainName;
 export const cloudFrontDistributionId = cfDistribution.id;
-export const tableName = imagesTable.name;
+
+// We use an ignoreChanges on callbackUrls to allow manual additions if needed,
+// but for the first run, we want it to be clean.
+// Alternatively, we could update the client here, but it's risky.

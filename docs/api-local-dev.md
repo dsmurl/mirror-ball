@@ -29,7 +29,7 @@ This runs `bun --watch apps/api/src/main.ts` under `apps/api` (via Nx) and serve
 ## Test
 
 ```
-curl -s http://localhost:8080/api/health
+curl -s http://localhost:8080/health
 ```
 
 When auth is implemented, include an `Authorization: Bearer <JWT>` header for protected endpoints.
