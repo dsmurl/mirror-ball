@@ -1,9 +1,10 @@
 interface NavigationProps {
-  view: "gallery" | "upload";
-  onViewChange: (view: "gallery" | "upload") => void;
+  view: "gallery" | "upload" | "admin";
+  onViewChange: (view: "gallery" | "upload" | "admin") => void;
+  isAdmin: boolean;
 }
 
-export function Navigation({ view, onViewChange }: NavigationProps) {
+export function Navigation({ view, onViewChange, isAdmin }: NavigationProps) {
   return (
     <nav style={{ marginBottom: 24, display: "flex", gap: 16 }}>
       <button
@@ -33,6 +34,22 @@ export function Navigation({ view, onViewChange }: NavigationProps) {
         }}
       >
         Upload New
+      </button>
+      <button
+        onClick={() => isAdmin && onViewChange("admin")}
+        disabled={!isAdmin}
+        style={{
+          background: "none",
+          border: "none",
+          borderBottom: view === "admin" ? "2px solid #007bff" : "2px solid transparent",
+          color: isAdmin ? (view === "admin" ? "#007bff" : "#666") : "#ccc",
+          padding: "8px 0",
+          cursor: isAdmin ? "pointer" : "not-allowed",
+          fontWeight: view === "admin" ? "bold" : "normal",
+        }}
+        title={isAdmin ? "" : "Admin access required"}
+      >
+        Admin
       </button>
     </nav>
   );

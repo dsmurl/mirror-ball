@@ -1,75 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "./hooks/useAuth";
+import { useImages } from "./hooks/useImages";
+import { useToast } from "./hooks/useToast";
+import { useConfig } from "./hooks/useConfig";
 import { Header } from "./components/Header";
 import { Navigation } from "./components/Navigation";
 import { Gallery } from "./components/Gallery";
 import { Uploader } from "./components/Uploader";
+import { AdminPanel } from "./components/AdminPanel";
 import { Toast } from "./components/Toast";
 import { DebugEnv } from "./components/DebugEnv";
 
 export default function App() {
-  const [token, setToken] = useState("");
+  const queryClient = useQueryClient();
+  const { token, user, logout, isAdmin } = useAuth();
+  const { toast, showToast } = useToast();
+  const { API_BASE, COGNITO_DOMAIN, CLIENT_ID, REDIRECT_URI } = useConfig();
+
+  const { images, isLoading: isLoadingImages } = useImages({ token, apiBase: API_BASE });
+
   const [status, setStatus] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [view, setView] = useState<"gallery" | "upload">("gallery");
-  const [images, setImages] = useState<any[]>([]);
+  const [view, setView] = useState<"gallery" | "upload" | "admin">("gallery");
   const [searchTerm, setSearchTerm] = useState("");
-  const [isLoadingImages, setIsLoadingImages] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-  const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN ?? "";
-  const CLIENT_ID = import.meta.env.VITE_USER_POOL_CLIENT_ID ?? "";
-  const REDIRECT_URI = window.location.origin + "/";
-
-  useEffect(() => {
-    // Check for tokens in the URL hash (Implicit flow for simplicity in this demo)
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const idToken = params.get("id_token");
-
-    if (idToken) {
-      setToken(idToken);
-      // Basic decode of JWT for UI display
-      try {
-        const payload = JSON.parse(atob(idToken.split(".")[1]));
-        setUser(payload);
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } catch (e) {
-        console.error("Failed to parse token", e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (token && view === "gallery") {
-      fetchImages();
-    }
-  }, [token, view]);
-
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  async function fetchImages() {
-    setIsLoadingImages(true);
-    try {
-      const res = await fetch(`${API_BASE}/images`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch images");
-      const data = await res.json();
-      setImages(data.items || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoadingImages(false);
-    }
-  }
 
   function handleLogin() {
     const loginUrl = `${COGNITO_DOMAIN}/login?client_id=${CLIENT_ID}&response_type=token&scope=email+openid+profile&redirect_uri=${encodeURIComponent(
@@ -79,12 +33,10 @@ export default function App() {
   }
 
   function handleLogout() {
-    setToken("");
-    setUser(null);
     const logoutUrl = `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${encodeURIComponent(
       REDIRECT_URI,
     )}`;
-    window.location.href = logoutUrl;
+    logout(logoutUrl);
   }
 
   async function handleUpload(title: string, file: File) {
@@ -149,7 +101,9 @@ export default function App() {
       if (!confirmRes.ok) throw new Error("Confirmation failed");
 
       setStatus("Upload successful!");
-      // Switch to gallery to see the new image
+      // Invalidate images query to refresh the gallery
+      await queryClient.invalidateQueries({ queryKey: ["images"] });
+      // Switch to the gallery to see the new image
       setTimeout(() => {
         setView("gallery");
         setStatus("");
@@ -164,20 +118,38 @@ export default function App() {
 
   const handleCopyLink = (url: string) => {
     navigator.clipboard.writeText(url);
-    setToast("Link copied to clipboard!");
+    showToast("Link copied to clipboard!");
   };
 
   return (
     <div
-      style={{ fontFamily: "system-ui, sans-serif", padding: 24, maxWidth: 800, margin: "0 auto" }}
+      style={{
+        fontFamily: "system-ui, sans-serif",
+        padding: 24,
+        maxWidth: 800,
+        margin: "0 auto",
+      }}
     >
+      <style>
+        {`
+          html {
+            scrollbar-gutter: stable;
+          }
+          @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+          }
+        `}
+      </style>
       <Toast message={toast} />
 
       <Header user={user} onLogin={handleLogin} onLogout={handleLogout} />
 
       {user ? (
         <>
-          <Navigation view={view} onViewChange={setView} />
+          <Navigation view={view} onViewChange={setView} isAdmin={isAdmin} />
 
           {view === "gallery" ? (
             <Gallery
@@ -187,8 +159,10 @@ export default function App() {
               onSearchChange={setSearchTerm}
               onCopyLink={handleCopyLink}
             />
-          ) : (
+          ) : view === "upload" ? (
             <Uploader onUpload={handleUpload} isUploading={isUploading} status={status} />
+          ) : (
+            <AdminPanel />
           )}
 
           <hr style={{ margin: "24px 0" }} />
