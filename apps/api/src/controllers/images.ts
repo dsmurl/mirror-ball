@@ -25,6 +25,8 @@ export async function listImages(req: Request) {
     items.map((i: any) => ({
       imageId: i.imageId,
       owner: i.owner,
+      title: i.title || "Untitled",
+      originalFileName: i.originalFileName || "unknown",
       devName: i.devName,
       uploadTime: i.uploadTime,
       s3Key: i.s3Key,

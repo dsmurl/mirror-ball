@@ -2,11 +2,15 @@ import { useState, useEffect } from "react";
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [devName, setDevName] = useState("");
+  const [title, setTitle] = useState("");
   const [token, setToken] = useState("");
   const [status, setStatus] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [view, setView] = useState<"gallery" | "upload">("gallery");
+  const [images, setImages] = useState<any[]>([]);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
   const COGNITO_DOMAIN = import.meta.env.VITE_COGNITO_DOMAIN ?? "";
@@ -33,6 +37,37 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (token && view === "gallery") {
+      fetchImages();
+    }
+  }, [token, view]);
+
+  useEffect(() => {
+    if (toast) {
+      // Set the timer slightly longer than the animation (1s)
+      // to ensure the fade-out completes before the element is removed.
+      const timer = setTimeout(() => setToast(null), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  async function fetchImages() {
+    setIsLoadingImages(true);
+    try {
+      const res = await fetch(`${API_BASE}/images`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch images");
+      const data = await res.json();
+      setImages(data.items || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingImages(false);
+    }
+  }
+
   function handleLogin() {
     const loginUrl = `${COGNITO_DOMAIN}/login?client_id=${CLIENT_ID}&response_type=token&scope=email+openid+profile&redirect_uri=${encodeURIComponent(
       REDIRECT_URI,
@@ -51,8 +86,8 @@ export default function App() {
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !devName || !token) {
-      alert("Please provide file, dev name, and auth token");
+    if (!file || !token) {
+      alert("Please login and select a file");
       return;
     }
 
@@ -70,7 +105,7 @@ export default function App() {
         body: JSON.stringify({
           contentType: file.type,
           fileName: file.name,
-          devName: devName,
+          title: title,
         }),
       });
 
@@ -104,6 +139,12 @@ export default function App() {
 
       setStatus("Upload successful!");
       setFile(null);
+      setTitle("");
+      // Switch to gallery to see the new image
+      setTimeout(() => {
+        setView("gallery");
+        setStatus("");
+      }, 1500);
     } catch (err: any) {
       console.error(err);
       setStatus(`Error: ${err.message}`);
@@ -114,15 +155,43 @@ export default function App() {
 
   return (
     <div
-      style={{ fontFamily: "system-ui, sans-serif", padding: 24, maxWidth: 600, margin: "0 auto" }}
+      style={{ fontFamily: "system-ui, sans-serif", padding: 24, maxWidth: 800, margin: "0 auto" }}
     >
+      <style>
+        {`
+          @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+          }
+        `}
+      </style>
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            top: 20,
+            right: 20,
+            backgroundColor: "#28a745",
+            color: "white",
+            padding: "12px 24px",
+            borderRadius: 4,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            zIndex: 1000,
+            animation: "fadeInOut 1s ease-in-out forwards",
+          }}
+        >
+          {toast}
+        </div>
+      )}
       <header
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           borderBottom: "2px solid #eee",
-          marginBottom: 24,
+          marginBottom: 12,
           paddingBottom: 12,
         }}
       >
@@ -143,85 +212,232 @@ export default function App() {
         </div>
       </header>
 
-      <p>Simple image upload/list site with role-based access.</p>
-
-      <section style={{ border: "1px solid #ccc", padding: 16, borderRadius: 8 }}>
-        <h2>Upload Image</h2>
-        <form onSubmit={handleUpload}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontWeight: "bold" }}>Dev Name:</label>
-            <input
-              type="text"
-              value={devName}
-              onChange={(e) => setDevName(e.target.value)}
-              placeholder="e.g. John Doe"
-              style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
-            />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontWeight: "bold" }}>Auth Token (JWT):</label>
-            <textarea
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Login to get token or paste manually"
-              style={{ width: "100%", height: 60, padding: 8, boxSizing: "border-box" }}
-            />
-          </div>
-
-          <div style={{ marginBottom: 12 }}>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-          </div>
-
+      {user && (
+        <nav style={{ marginBottom: 24, display: "flex", gap: 16 }}>
           <button
-            type="submit"
-            disabled={isUploading || !file || !token}
+            onClick={() => setView("gallery")}
             style={{
-              padding: "10px 20px",
-              backgroundColor: isUploading || !file || !token ? "#ccc" : "#007bff",
-              color: "white",
+              background: "none",
               border: "none",
-              borderRadius: 4,
-              cursor: isUploading || !file || !token ? "not-allowed" : "pointer",
+              borderBottom: view === "gallery" ? "2px solid #007bff" : "2px solid transparent",
+              color: view === "gallery" ? "#007bff" : "#666",
+              padding: "8px 0",
+              cursor: "pointer",
+              fontWeight: view === "gallery" ? "bold" : "normal",
             }}
           >
-            {isUploading ? "Uploading..." : "Upload Image"}
+            Images
           </button>
-        </form>
-
-        {status && (
-          <p
+          <button
+            onClick={() => setView("upload")}
             style={{
-              marginTop: 12,
-              padding: 8,
-              background: status.startsWith("Error") ? "#fee" : "#efe",
-              borderRadius: 4,
-              border: status.startsWith("Error") ? "1px solid #fcc" : "1px solid #cfc",
+              background: "none",
+              border: "none",
+              borderBottom: view === "upload" ? "2px solid #007bff" : "2px solid transparent",
+              color: view === "upload" ? "#007bff" : "#666",
+              padding: "8px 0",
+              cursor: "pointer",
+              fontWeight: view === "upload" ? "bold" : "normal",
             }}
           >
-            {status}
-          </p>
-        )}
-      </section>
+            Upload New
+          </button>
+        </nav>
+      )}
 
-      <hr style={{ margin: "24px 0" }} />
+      {user ? (
+        <>
+          {view === "gallery" ? (
+            <section>
+              <h2>Image Gallery</h2>
+              {isLoadingImages ? (
+                <p>Loading images...</p>
+              ) : images.length === 0 ? (
+                <p>No images found. Go to "Upload New" to add some!</p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: 16,
+                  }}
+                >
+                  {images.map((img) => {
+                    const isPdf = img.originalFileName?.toLowerCase().endsWith(".pdf");
+                    return (
+                      <div
+                        key={img.imageId}
+                        style={{ border: "1px solid #eee", borderRadius: 8, overflow: "hidden" }}
+                      >
+                        {isPdf ? (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: 150,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "#f8f9fa",
+                            }}
+                          >
+                            <svg
+                              width="64"
+                              height="64"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#666"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                              <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                          </div>
+                        ) : (
+                          <img
+                            src={img.publicUrl}
+                            alt={img.title}
+                            style={{ width: "100%", height: 150, objectFit: "cover" }}
+                          />
+                        )}
+                        <div style={{ padding: 8, fontSize: "0.8em" }}>
+                          <div
+                            style={{
+                              fontWeight: "bold",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {img.title}
+                          </div>
+                          <div style={{ color: "#666", fontSize: "0.9em", marginBottom: 4 }}>
+                            {img.originalFileName}
+                          </div>
+                          <div style={{ color: "#666", marginBottom: 4 }}>
+                            {img.devName} • {new Date(img.uploadTime).toLocaleDateString()}
+                          </div>
+                          <div
+                            style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}
+                          >
+                            <div
+                              style={{
+                                color: "#007bff",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                fontSize: "0.85em",
+                              }}
+                            >
+                              {img.publicUrl}
+                            </div>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(img.publicUrl);
+                                setToast("Link copied to clipboard!");
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#007bff",
+                                cursor: "pointer",
+                                fontSize: "0.85em",
+                                padding: 0,
+                                textDecoration: "underline",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              copy link
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          ) : (
+            <section style={{ border: "1px solid #ccc", padding: 16, borderRadius: 8 }}>
+              <h2>Upload Image</h2>
+              <form onSubmit={handleUpload}>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: "block", fontWeight: "bold", marginBottom: 4 }}>
+                    Title:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Enter image title"
+                    style={{ width: "100%", padding: 8, boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    required
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
+                </div>
 
-      <details>
-        <summary style={{ cursor: "pointer", color: "#666" }}>Debug Env</summary>
-        <ul style={{ fontSize: "0.8em", color: "#666", marginTop: 12 }}>
-          <li>API: {import.meta.env.VITE_API_BASE_URL ?? "(unset)"}</li>
-          <li>
-            UserPool: {import.meta.env.VITE_USER_POOL_ID ?? "(unset)"} /{" "}
-            {import.meta.env.VITE_USER_POOL_CLIENT_ID ?? "(unset)"}
-          </li>
-          <li>CloudFront: {import.meta.env.VITE_CLOUDFRONT_DOMAIN ?? "(unset)"}</li>
-          <li>Cognito Domain: {import.meta.env.VITE_COGNITO_DOMAIN ?? "(unset)"}</li>
-        </ul>
-      </details>
+                <button
+                  type="submit"
+                  disabled={isUploading || !file || !title}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: isUploading || !file || !title ? "#ccc" : "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: isUploading || !file || !title ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isUploading ? "Uploading..." : "Upload Image"}
+                </button>
+              </form>
+
+              {status && (
+                <p
+                  style={{
+                    marginTop: 12,
+                    padding: 8,
+                    background: status.startsWith("Error") ? "#fee" : "#efe",
+                    borderRadius: 4,
+                    border: status.startsWith("Error") ? "1px solid #fcc" : "1px solid #cfc",
+                  }}
+                >
+                  {status}
+                </p>
+              )}
+            </section>
+          )}
+
+          <hr style={{ margin: "24px 0" }} />
+
+          {/*<details>*/}
+          {/*  <summary style={{ cursor: "pointer", color: "#666" }}>Debug Env</summary>*/}
+          {/*  <ul style={{ fontSize: "0.8em", color: "#666", marginTop: 12 }}>*/}
+          {/*    <li>API: {import.meta.env.VITE_API_BASE_URL ?? "(unset)"}</li>*/}
+          {/*    <li>*/}
+          {/*      UserPool: {import.meta.env.VITE_USER_POOL_ID ?? "(unset)"} /{" "}*/}
+          {/*      {import.meta.env.VITE_USER_POOL_CLIENT_ID ?? "(unset)"}*/}
+          {/*    </li>*/}
+          {/*    <li>Cognito Domain: {import.meta.env.VITE_COGNITO_DOMAIN ?? "(unset)"}</li>*/}
+          {/*  </ul>*/}
+          {/*</details>*/}
+        </>
+      ) : (
+        <div style={{ textAlign: "center", marginTop: 100, color: "#666" }}>
+          <p>Please login to access the image gallery and upload features.</p>
+        </div>
+      )}
     </div>
   );
 }

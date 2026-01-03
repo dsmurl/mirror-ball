@@ -151,26 +151,25 @@ If you want to run it locally:
     ```
     _Note: To avoid the "bootstrap" failure below, you can perform a "Skeleton Deploy" first (see section 7)._
 
-### 7. Skeleton Deploy (Recommended for first-time setup)
+### 7. Skeleton Deploy (Auto-Detection)
 
-To avoid the "Chicken and Egg" problem where App Runner fails because your ECR is empty, you can deploy a placeholder image first:
+To avoid the "Chicken and Egg" problem where App Runner fails because your ECR is empty, the infrastructure is designed to **automatically detect** if your image exists.
 
-1.  **Enable Skeleton Mode**:
-    ```bash
-    pulumi config set usePublicImage true
-    ```
-2.  **Deploy**:
+1.  **Initial Deploy**: When you run `pulumi up` for the first time, Pulumi will check your ECR repository. Since it's empty, it will automatically use a public Nginx image to build your entire infrastructure (S3, CloudFront, Cognito).
+2.  **Manual Override**: If you want to force Skeleton Mode, you can use the config:
 
     ```bash
-    pulumi up
+    # Force Skeleton Mode
+    pulumi config set forceUsePublicImage true
+
+    # Return to auto-detection (default behavior)
+    pulumi config set forceUsePublicImage false
     ```
 
-    This will use a public Nginx image to build your entire infrastructure (S3, CloudFront, Cognito) without needing your local code or Docker.
-
-    _Note on Health Checks:_ Pulumi is configured to use a static **HTTP health check** on the root path (`/`). Since the standard Nginx image returns a 200 OK on `/` and our API is also configured to handle `/`, the health check will pass for both the placeholder and your real application without needing to change the infrastructure configuration.
+_Note on Health Checks:_ Pulumi is configured to use a static **HTTP health check** on the root path (`/`). Since the standard Nginx image returns a 200 OK on `/` and our API is also configured to handle `/`, the health check will pass for both the placeholder and your real application without needing to change the infrastructure configuration.
 
 3.  **Deploy your real API**:
-    Once the infrastructure is up, you must follow **Section 8** to build and push your real API image with the `:bootstrap` tag, then disable Skeleton Mode.
+    Once the infrastructure is up, you must follow **Section 8** to build and push your real API image with the `:bootstrap` tag. Pulumi will automatically detect the new image and switch from Skeleton Mode to your real API on the next `pulumi up`.
 
 ### 8. Bootstrapping ECR (First Real API Image)
 
@@ -196,7 +195,7 @@ App Runner cannot start your actual API without an image in ECR. While Skeleton 
     If you used Skeleton Mode, now tell Pulumi to use your real image:
     ```bash
     cd apps/infra
-    pulumi config set usePublicImage false
+    pulumi config set forceUsePublicImage false
     pulumi up
     ```
 
@@ -218,6 +217,24 @@ CI authenticates with AWS via OIDC and runs `pulumi preview` on PRs and `pulumi 
 
 ## Troubleshooting
 
+### Service Already Exists Error
+
+If `pulumi up` fails with `InvalidRequestException: Service with the provided name already exists: mirror-ball-api-dev`, it means there is an orphaned App Runner service in your AWS account that Pulumi is trying to recreate.
+
+**Resolution:**
+
+1.  **Delete the existing service** via the AWS Console (**App Runner** -> **Services** -> `mirror-ball-api-dev` -> **Delete**).
+2.  **Wait** for the deletion to complete in the console.
+3.  **Synchronize Pulumi**:
+    ```bash
+    cd apps/infra
+    pulumi refresh
+    ```
+4.  **Redeploy**:
+    ```bash
+    pulumi up
+    ```
+
 ### App Runner Service in `CREATE_FAILED` State
 
 If `pulumi up` fails with an error stating that the App Runner service is in an unexpected state `CREATE_FAILED`, it means the service reached a terminal failure state. AWS does not allow updating a service in this state; it must be deleted and recreated.
@@ -238,6 +255,13 @@ If `pulumi up` fails with an error stating that the App Runner service is in an 
     ```bash
     pulumi up
     ```
+
+### Image Repository Type Change Error
+
+If you see an error like `The image repository type cannot be changed in UpdateService request`, this is because AWS App Runner does not allow switching between `ECR_PUBLIC` (Skeleton Mode) and `ECR` (Real API) on an existing service.
+
+**Resolution:**
+The Pulumi code is now configured with `replaceOnChanges` to handle this automatically by deleting and recreating the service when you switch modes. If you still encounter issues, follow the manual **App Runner Service in `CREATE_FAILED` State** steps above to clear the service and start fresh.
 
 ### Missing ECR Image
 

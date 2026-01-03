@@ -5,7 +5,7 @@ import {
   ConfirmUploadInput,
 } from "@mirror-ball/shared-schemas/api.ts";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ulid } from "ulid";
 import { s3, doc } from "../lib/aws.ts";
@@ -24,11 +24,30 @@ export async function presignUpload(req: Request) {
   const body = await req.json().catch(() => ({}));
   const parsed = PresignUploadInput.safeParse(body);
   if (!parsed.success) return error(400, "Invalid body", parsed.error.issues);
-  const { contentType, fileName, devName } = parsed.data;
+  const { contentType, fileName, title } = parsed.data;
 
   if (!BUCKET_NAME) return error(500, "BUCKET_NAME not configured");
   if (!TABLE_NAME) return error(500, "TABLE_NAME not configured");
 
+  // Check for title uniqueness using GSI
+  const existing = await doc.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: "TitleIndex",
+      KeyConditionExpression: "title = :t",
+      ExpressionAttributeValues: { ":t": title },
+      Limit: 1,
+    }),
+  );
+
+  if (existing.Items && existing.Items.length > 0) {
+    return error(
+      400,
+      `An image with the title "${title}" already exists. Please choose a unique title.`,
+    );
+  }
+
+  const sanitizedTitle = title.replace(/\s+/g, "-");
   const imageId = ulid();
   const owner = (claims["cognito:username"] as string) || (claims.email ?? "unknown");
   const key = `images/${owner}/${imageId}/${fileName}`;
@@ -50,7 +69,9 @@ export async function presignUpload(req: Request) {
       Item: {
         imageId,
         owner,
-        devName,
+        title: sanitizedTitle,
+        originalFileName: fileName,
+        devName: owner,
         uploadTime: now,
         s3Key: key,
         publicUrl: cf,

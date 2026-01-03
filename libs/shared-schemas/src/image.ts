@@ -3,6 +3,8 @@ import { z } from "zod";
 export const ImageSchema = z.object({
   imageId: z.string(),
   owner: z.string(),
+  title: z.string(),
+  originalFileName: z.string(),
   devName: z.string(),
   uploadTime: z.string(),
   s3Key: z.string(),

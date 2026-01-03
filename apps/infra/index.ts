@@ -45,9 +45,19 @@ const bucketPublicAccess = new aws.s3.BucketPublicAccessBlock("mirror-ball-Bucke
 
 // 2) DynamoDB table (on-demand)
 const imagesTable = new aws.dynamodb.Table("mirror-ball-ImagesTable", {
-  attributes: [{ name: "imageId", type: "S" }],
+  attributes: [
+    { name: "imageId", type: "S" },
+    { name: "title", type: "S" },
+  ],
   hashKey: "imageId",
   billingMode: "PAY_PER_REQUEST",
+  globalSecondaryIndexes: [
+    {
+      name: "TitleIndex",
+      hashKey: "title",
+      projectionType: "KEYS_ONLY",
+    },
+  ],
   tags: commonTags,
 });
 
@@ -246,7 +256,24 @@ const oac = new aws.cloudfront.OriginAccessControl("mirror-ball-Oac", {
 });
 
 // 6) App Runner service
-const usePublicImage = config.getBoolean("usePublicImage") ?? false;
+const forceUsePublicImageConfig = config.getBoolean("forceUsePublicImage");
+
+// Check if the ECR image exists (to auto-switch to Skeleton Mode if missing)
+// We use a regular Promise check because Pulumi Outputs don't support a clean .catch() or error handler for missing resources during preview
+const imageExists = pulumi.all([ecrRepo.name, imageTag]).apply(async ([repoName, tag]) => {
+  try {
+    const img = await aws.ecr.getImage({
+      repositoryName: repoName,
+      imageTag: tag,
+    });
+    return !!img.imageDigest;
+  } catch {
+    return false;
+  }
+});
+
+// Logic: forceUsePublicImage "true" wins, otherwise check if the image exists
+const usePublicImage = forceUsePublicImageConfig || imageExists.apply((exists: boolean) => !exists);
 
 const imageConfiguration: aws.types.input.apprunner.ServiceSourceConfigurationImageRepositoryImageConfiguration =
   {
@@ -301,10 +328,16 @@ const appRunnerService = new aws.apprunner.Service(
     },
     tags: commonTags,
   },
-  { dependsOn: [appRunnerInstanceAccess] },
+  {
+    dependsOn: [appRunnerInstanceAccess],
+    replaceOnChanges: ["sourceConfiguration.imageRepository.imageRepositoryType"],
+  },
 );
 
 export const apiBaseUrl = appRunnerService.serviceUrl;
+export const appRunnerImage = appRunnerService.sourceConfiguration.apply(
+  (sc) => sc.imageRepository?.imageIdentifier,
+);
 
 // Build CloudFront distribution with two origins: S3 and App Runner
 // Using a placeholder domain initially if the service URL isn't ready,

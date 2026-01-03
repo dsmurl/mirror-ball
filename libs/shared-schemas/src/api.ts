@@ -3,7 +3,7 @@ import { z } from "zod";
 export const PresignUploadInput = z.object({
   contentType: z.string().min(1),
   fileName: z.string().min(1),
-  devName: z.string().min(1),
+  title: z.string().min(1),
 });
 export type PresignUploadInput = z.infer<typeof PresignUploadInput>;
 
