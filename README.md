@@ -65,7 +65,7 @@ pnpm nx run web:dev
 
 Recommended `.env` in `apps/web/`:
 
-- `VITE_API_BASE_URL` — e.g., `http://localhost:8080/api`
+- `VITE_API_BASE_URL` — `http://localhost:8080/api` (for local dev)
 - `VITE_USER_POOL_ID` - from `pulumi stack output`
 - `VITE_USER_POOL_CLIENT_ID` - from `pulumi stack output`
 - `VITE_COGNITO_DOMAIN` - from `pulumi stack output` (e.g., `https://<domain>.auth.us-west-2.amazoncognito.com`)

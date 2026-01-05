@@ -83,6 +83,7 @@ jobs:
           UPID=$(pulumi stack output --stack $STACK_NAME userPoolId)
           UPCLIENTID=$(pulumi stack output --stack $STACK_NAME userPoolClientId)
           UPDOMAIN=$(pulumi stack output --stack $STACK_NAME userPoolDomain)
+          APIURL=$(pulumi stack output --stack $STACK_NAME apiBaseUrl)
 
           echo "bucket=$BUCKET" >> $GITHUB_OUTPUT
           echo "cfid=$CFID" >> $GITHUB_OUTPUT
@@ -90,14 +91,16 @@ jobs:
           echo "upId=$UPID" >> $GITHUB_OUTPUT
           echo "upClientId=$UPCLIENTID" >> $GITHUB_OUTPUT
           echo "upDomain=$UPDOMAIN" >> $GITHUB_OUTPUT
+          echo "apiUrl=$APIURL" >> $GITHUB_OUTPUT
 
           echo "Deploying to Bucket: $BUCKET"
           echo "CloudFront Domain: $CFDOMAIN"
+          echo "API URL: $APIURL"
 
       - name: Build web
         if: ${{ steps.outs.outputs.bucket != '' }}
         env:
-          VITE_API_BASE_URL: https://${{ steps.outs.outputs.cfdomain }}/api
+          VITE_API_BASE_URL: ${{ steps.outs.outputs.apiUrl }}
           VITE_USER_POOL_ID: ${{ steps.outs.outputs.upId }}
           VITE_USER_POOL_CLIENT_ID: ${{ steps.outs.outputs.upClientId }}
           VITE_COGNITO_DOMAIN: ${{ steps.outs.outputs.upDomain }}

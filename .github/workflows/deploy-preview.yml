@@ -67,10 +67,11 @@ jobs:
           echo "upId=$(pulumi stack output --stack $STACK_NAME userPoolId)" >> $GITHUB_OUTPUT
           echo "upClientId=$(pulumi stack output --stack $STACK_NAME userPoolClientId)" >> $GITHUB_OUTPUT
           echo "upDomain=$(pulumi stack output --stack $STACK_NAME userPoolDomain)" >> $GITHUB_OUTPUT
+          echo "apiUrl=$(pulumi stack output --stack $STACK_NAME apiBaseUrl)" >> $GITHUB_OUTPUT
 
       - name: Build web (Verification only)
         env:
-          VITE_API_BASE_URL: https://${{ steps.outs.outputs.cfdomain }}/api
+          VITE_API_BASE_URL: ${{ steps.outs.outputs.apiUrl }}
           VITE_USER_POOL_ID: ${{ steps.outs.outputs.upId }}
           VITE_USER_POOL_CLIENT_ID: ${{ steps.outs.outputs.upClientId }}
           VITE_COGNITO_DOMAIN: ${{ steps.outs.outputs.upDomain }}

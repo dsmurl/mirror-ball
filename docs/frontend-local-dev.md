@@ -18,7 +18,7 @@ Serves on `http://localhost:5173` by default.
 
 Create `.env` in `apps/web/` (or use your shell) with:
 
-- `VITE_API_BASE_URL` — e.g., `https://<cloudfront-domain>/api`
+- `VITE_API_BASE_URL` — `http://localhost:8080/api`
 - `VITE_USER_POOL_ID` — from Pulumi output
 - `VITE_USER_POOL_CLIENT_ID` — from Pulumi output
 - `VITE_COGNITO_DOMAIN` — from Pulumi output (e.g., `https://mirror-ball-dev-123.auth.us-west-2.amazoncognito.com`)
