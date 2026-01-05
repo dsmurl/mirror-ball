@@ -4,9 +4,14 @@ import { useUpdateAppConfig } from "../hooks/useUpdateAppConfig.ts";
 import { useAuthContext } from "../contexts/AuthContext";
 
 export const AdminPanel = () => {
-  const { token, appConfig } = useAuthContext();
+  const { token, appConfig, user } = useAuthContext();
   const { mutate: saveConfig, isPending: isSaving } = useUpdateAppConfig(token);
   const [userRestriction, setUserRestriction] = useState("");
+
+  const email = user?.email || "";
+  const isValid =
+    !userRestriction ||
+    (userRestriction.includes("@") && email.toLowerCase().includes(userRestriction.toLowerCase()));
 
   // Sync local state when data is loaded
   useEffect(() => {
@@ -34,25 +39,35 @@ export const AdminPanel = () => {
             padding: 10,
             boxSizing: "border-box",
             borderRadius: 4,
-            border: "1px solid #ccc",
+            border: `1px solid ${isValid ? "#ccc" : "#dc3545"}`,
           }}
         />
+        {!isValid && (
+          <p style={{ color: "#dc3545", fontSize: "0.85em", marginTop: 4 }}>
+            Restriction must contain "@" and be a part of your own email to avoid locking yourself
+            out.
+          </p>
+        )}
         <p style={{ fontSize: "0.85em", color: "#666", marginTop: 8 }}>
           If set, all users must have this string in their email to login or access the API.
         </p>
       </div>
 
       <button
-        onClick={() => saveConfig({ userRestriction })}
-        disabled={isSaving}
+        onClick={() => {
+          if (isValid) {
+            saveConfig({ userRestriction });
+          }
+        }}
+        disabled={isSaving || !isValid}
         style={{
           marginTop: 16,
           padding: "10px 24px",
-          backgroundColor: "#dc3545",
+          backgroundColor: isValid ? "#dc3545" : "#ccc",
           color: "white",
           border: "none",
           borderRadius: 4,
-          cursor: isSaving ? "not-allowed" : "pointer",
+          cursor: isSaving || !isValid ? "not-allowed" : "pointer",
           fontWeight: "bold",
         }}
       >
