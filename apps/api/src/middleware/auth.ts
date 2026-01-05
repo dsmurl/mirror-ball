@@ -3,7 +3,7 @@ import { AdminAddUserToGroupCommand } from "@aws-sdk/client-cognito-identity-pro
 import { REGION, USER_POOL_ID } from "../lib/config.ts";
 import { error } from "../lib/responses.ts";
 import { cognito } from "../lib/aws.ts";
-import { fetchUserRestriction } from "../controllers/config.ts";
+import { fetchUserRestriction } from "../lib/config-service.ts";
 
 // JWKS for Cognito
 const jwksUri = USER_POOL_ID
@@ -51,12 +51,15 @@ export async function authenticate(
 
     // Enforce dynamic userRestriction from DynamoDB
     const userRestriction = await fetchUserRestriction();
+    console.log(`[auth] userRestriction: "${userRestriction}", user email: "${payload.email}"`);
+
     if (
       userRestriction &&
       (!payload.email ||
         !(payload.email as string).toLowerCase().includes(userRestriction.toLowerCase()))
     ) {
-      return error(403, `Access restricted. Your email does not fit criteria."`);
+      console.log(`[auth] 403 Access Denied for user ${payload.email}`);
+      return error(403, "Access restricted. Your email does not fit criteria.");
     }
 
     return { claims: payload as Claims, groups };

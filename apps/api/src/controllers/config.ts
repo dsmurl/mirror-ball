@@ -1,39 +1,51 @@
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { AppConfig, AppConfigSchema, defaultAppConfig } from "@mirror-ball/shared-schemas/config";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { AppConfigSchema } from "@mirror-ball/shared-schemas/config";
 
 import { doc } from "../lib/aws.ts";
 import { CONFIG_TABLE_NAME } from "../lib/config.ts";
+import { fetchFullConfig, clearConfigCache } from "../lib/config-service.ts";
 import { json, error } from "../lib/responses.ts";
 import { authenticate, requireRole } from "../middleware/auth.ts";
 
 const CONFIG_PK = "GLOBAL";
 
 export async function setConfig(req: Request) {
+  console.log("[config-controller] setConfig called");
   const auth = await authenticate(req);
   if (auth instanceof Response) return auth;
   const { groups } = auth;
 
-  if (!requireRole(groups, "admin")) return error(403, "Admin only");
+  if (!requireRole(groups, "admin")) {
+    console.log("[config-controller] 403: User not admin");
+    return error(403, "Admin only");
+  }
 
   const body = await req.json().catch(() => ({}));
   const parsed = AppConfigSchema.safeParse(body);
 
   if (!parsed.success) {
+    console.log("[config-controller] 400: Invalid config data", parsed.error.issues);
     return error(400, "Invalid configuration data", parsed.error.issues);
   }
 
   if (!CONFIG_TABLE_NAME) return error(500, "CONFIG_TABLE_NAME not configured");
 
-  await doc.send(
-    new PutCommand({
-      TableName: CONFIG_TABLE_NAME,
-      Item: {
-        configKey: CONFIG_PK,
-        ...parsed.data,
-        updatedAt: new Date().toISOString(),
-      },
-    }),
-  );
+  try {
+    await doc.send(
+      new PutCommand({
+        TableName: CONFIG_TABLE_NAME,
+        Item: {
+          configKey: CONFIG_PK,
+          ...parsed.data,
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    );
+    console.log("[config-controller] Successfully updated config in DDB");
+  } catch (err) {
+    console.error("[config-controller] Failed to update config in DDB:", err);
+    return error(500, "Failed to update configuration");
+  }
 
   // Clear local cache
   clearConfigCache();
@@ -42,8 +54,12 @@ export async function setConfig(req: Request) {
 }
 
 export async function getConfig(req: Request) {
+  console.log("[config-controller] getConfig called");
   const auth = await authenticate(req);
-  if (auth instanceof Response) return auth;
+  if (auth instanceof Response) {
+    console.log("[config-controller] Auth failed in getConfig");
+    return auth;
+  }
   const { claims } = auth;
 
   const config = await fetchFullConfig();
@@ -60,65 +76,4 @@ export async function getConfig(req: Request) {
     userRestriction,
     isRestricted,
   });
-}
-
-// Simple in-memory cache
-let cachedConfig: AppConfig = defaultAppConfig;
-let lastFetchTime = 0;
-const CACHE_TTL = 60 * 1000; // 1 minute
-
-export function clearConfigCache() {
-  cachedConfig = defaultAppConfig;
-  lastFetchTime = 0;
-}
-
-export async function fetchFullConfig() {
-  const now = Date.now();
-  if (cachedConfig !== null && now - lastFetchTime < CACHE_TTL && lastFetchTime !== 0) {
-    return cachedConfig;
-  }
-
-  if (!CONFIG_TABLE_NAME) {
-    console.error("CONFIG_TABLE_NAME not set");
-    return defaultAppConfig;
-  }
-
-  try {
-    const res = await doc.send(
-      new GetCommand({
-        TableName: CONFIG_TABLE_NAME,
-        Key: { configKey: CONFIG_PK },
-      }),
-    );
-
-    if (res.Item) {
-      const { configKey, updatedAt, ...config } = res.Item;
-      cachedConfig = config as AppConfig;
-    } else {
-      console.log("No config found in DynamoDB, initializing with defaultAppConfig");
-      cachedConfig = defaultAppConfig;
-      // Persist the default config
-      await doc.send(
-        new PutCommand({
-          TableName: CONFIG_TABLE_NAME,
-          Item: {
-            configKey: CONFIG_PK,
-            ...defaultAppConfig,
-            updatedAt: new Date().toISOString(),
-          },
-        }),
-      );
-    }
-
-    lastFetchTime = now;
-    return cachedConfig;
-  } catch (err) {
-    console.error("Failed to fetch app config:", err);
-    return cachedConfig || defaultAppConfig;
-  }
-}
-
-export async function fetchUserRestriction(): Promise<string | null> {
-  const config = await fetchFullConfig();
-  return config?.userRestriction || "";
 }
