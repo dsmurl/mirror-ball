@@ -74,11 +74,14 @@ export function clearConfigCache() {
 
 export async function fetchFullConfig() {
   const now = Date.now();
-  if (cachedConfig !== null && now - lastFetchTime < CACHE_TTL) {
+  if (cachedConfig !== null && now - lastFetchTime < CACHE_TTL && lastFetchTime !== 0) {
     return cachedConfig;
   }
 
-  if (!CONFIG_TABLE_NAME) return null;
+  if (!CONFIG_TABLE_NAME) {
+    console.error("CONFIG_TABLE_NAME not set");
+    return defaultAppConfig;
+  }
 
   try {
     const res = await doc.send(
@@ -92,14 +95,26 @@ export async function fetchFullConfig() {
       const { configKey, updatedAt, ...config } = res.Item;
       cachedConfig = config as AppConfig;
     } else {
+      console.log("No config found in DynamoDB, initializing with defaultAppConfig");
       cachedConfig = defaultAppConfig;
+      // Persist the default config
+      await doc.send(
+        new PutCommand({
+          TableName: CONFIG_TABLE_NAME,
+          Item: {
+            configKey: CONFIG_PK,
+            ...defaultAppConfig,
+            updatedAt: new Date().toISOString(),
+          },
+        }),
+      );
     }
 
     lastFetchTime = now;
     return cachedConfig;
   } catch (err) {
     console.error("Failed to fetch app config:", err);
-    return cachedConfig;
+    return cachedConfig || defaultAppConfig;
   }
 }
 
