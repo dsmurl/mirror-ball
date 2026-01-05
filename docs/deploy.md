@@ -73,7 +73,17 @@ The following should be configured in your GitHub Environment (e.g., `dev`):
 - `AWS_REGION`: The target AWS region (e.g., `us-west-2`).
 - `AWS_ROLE_DEPLOYER_ARN`: The ARN of the `mirror-ball-creator` IAM role.
   - Note: Role ARNs are identifiers and are safe to store as Variables; they require OIDC trust to be assumed.
-- `PROJECT_NAME`: Your project prefix (e.g., `sams-images`).
+- `PROJECT_NAME`: Your project prefix (e.g., `sams-images`). **Crucial**: This must match the `PROJECT_NAME` you use locally if you want to deploy to the same infrastructure. If left unset, it defaults to `mirror-ball`.
+
+## Verifying the Web Deployment
+
+The web assets are uploaded to the S3 bucket under the `site/` prefix. You can verify this in the AWS Console:
+
+1. Go to **S3**.
+2. Find your bucket (e.g., `mirror-ball-sams-images-dev-...`).
+3. You should see a `site/` folder containing `index.html` and an `assets/` folder.
+
+If the bucket is empty, check the GitHub Action logs for the "Sync site to S3" step.
 
 See also:
 

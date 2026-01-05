@@ -374,7 +374,13 @@ const cfDistribution = new aws.cloudfront.Distribution(`${prefix}-Cdn`, {
   comment: `${prefix} cdn`,
   origins: [
     {
-      originId: "s3-origin",
+      originId: "site-origin",
+      domainName: bucket.bucketRegionalDomainName,
+      originAccessControlId: oac.id,
+      originPath: "/site",
+    },
+    {
+      originId: "images-origin",
       domainName: bucket.bucketRegionalDomainName,
       originAccessControlId: oac.id,
     },
@@ -391,7 +397,7 @@ const cfDistribution = new aws.cloudfront.Distribution(`${prefix}-Cdn`, {
   ],
   defaultRootObject: "index.html",
   defaultCacheBehavior: {
-    targetOriginId: "s3-origin",
+    targetOriginId: "site-origin",
     viewerProtocolPolicy: "redirect-to-https",
     allowedMethods: ["GET", "HEAD"],
     cachedMethods: ["GET", "HEAD"],
@@ -414,7 +420,7 @@ const cfDistribution = new aws.cloudfront.Distribution(`${prefix}-Cdn`, {
     },
     {
       pathPattern: "/images/*",
-      targetOriginId: "s3-origin",
+      targetOriginId: "images-origin",
       viewerProtocolPolicy: "redirect-to-https",
       allowedMethods: ["GET", "HEAD"],
       cachedMethods: ["GET", "HEAD"],
