@@ -1,7 +1,8 @@
 # mirror-ball
 
-Welcome to the best mirror ball project ever!
-Rated the best image hosting project of 2025 by [New York Timus](https://elementor.com/blog/best-free-image-hosting-sites/).
+## Welcome to the best mirror ball project ever!
+
+Rated the best image hosting project of 2025 by [New York Tymes](https://elementor.com/blog/best-free-image-hosting-sites/).
 
 Simple image upload and listing site with role-based access, built as an Nx monorepo. Frontend (Vite) and backend (Bun) share Zod schemas. Infra is provisioned with Pulumi on AWS (S3, CloudFront, Cognito, DynamoDB, App Runner).
 
