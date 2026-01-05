@@ -45,11 +45,6 @@ Add the following to your `~/.aws/config`:
   role_arn = arn:aws:iam::<ACCOUNT_ID>:role/mirror-ball-creator
   source_profile = mirror-ball-base
   region = us-west-2
-
-  [profile mirror-ball-destroyer]
-  role_arn = arn:aws:iam::<ACCOUNT_ID>:role/mirror-ball-destroyer
-  source_profile = mirror-ball-base
-  region = us-west-2
 ```
 
 Replace `<ACCOUNT_ID>` with your actual AWS Account ID.

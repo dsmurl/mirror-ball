@@ -55,28 +55,21 @@ Before CI can take over, you need to manually set up the OIDC provider, the IAM 
 
 ### 2. Create IAM Policies
 
-Create the two permission policies that will be attached to the roles:
+Create the permission policy that will be attached to the deployer role:
 
 1.  Go to **IAM** -> **Policies** -> **Create policy**.
 2.  Select the **JSON** tab.
-3.  For the first policy (`mirror-ball-creator-policy`):
+3.  For the policy (`mirror-ball-creator-policy`):
     - Copy and paste the content of [mirror-ball-creator-policy.json](../apps/infra/permissions/mirror-ball-creator-policy.json).
     - Click **Next**.
     - Policy name: `mirror-ball-creator-policy`.
     - Click **Create policy**.
-4.  For the second policy (`mirror-ball-destroyer-policy`):
-    - Click **Create policy** again.
-    - Select the **JSON** tab.
-    - Copy and paste the content of [mirror-ball-destroyer-policy.json](../apps/infra/permissions/mirror-ball-destroyer-policy.json).
-    - Click **Next**.
-    - Policy name: `mirror-ball-destroyer-policy`.
-    - Click **Create policy**.
 
-### 3. Create IAM Roles
+### 3. Create IAM Role
 
-Create the two roles trusted by your GitHub repo’s OIDC provider:
+Create the role trusted by your GitHub repo’s OIDC provider:
 
-1.  For each role (`mirror-ball-creator` and `mirror-ball-destroyer`):
+1.  For the role (`mirror-ball-creator`):
     1.  Go to **IAM** -> **Roles** -> **Create Role**.
     2.  Select **Custom trust policy**.
     3.  Paste the following **Trust Policy** (replace `<ACCOUNT_ID>` with your AWS Account ID):
@@ -297,26 +290,18 @@ The Pulumi code is now configured with `replaceOnChanges` to handle this automat
 
 If App Runner fails to start with a "Health check failed" or "Image pull error," ensure you have pushed the `bootstrap` image to ECR as described in [Section 8](#8-bootstrapping-ecr-for-your-real-api).
 
-### Switching Permissions for Up vs Destroy
+### 10. Destroying the Stack
 
-If you are using a single IAM role or user for local development, you may need to swap its attached policy depending on whether you are building or tearing down the stack.
+If you want to tear down the infrastructure, you should do so from your local command line:
 
-1.  **To Destroy the stack**:
-    - Go to the **AWS Console** -> **IAM** -> **Roles** (or Users).
-    - Select your deployment role (e.g., `mirror-ball-creator`).
-    - Detach the `mirror-ball-creator-policy`.
-    - Attach the `mirror-ball-destroyer-policy` (found in `apps/infra/permissions/mirror-ball-destroyer-policy.json`).
-    - Run the destroy command:
-      ```bash
-      cd apps/infra
-      pulumi destroy
-      ```
-2.  **To Deploy/Up the stack again**:
-    - Go back to the **AWS Console**.
-    - Detach the `mirror-ball-destroyer-policy`.
-    - Re-attach the `mirror-ball-creator-policy` (found in `apps/infra/permissions/mirror-ball-creator-policy.json`).
-    - Run the up command:
-      ```bash
-      cd apps/infra
-      pulumi up
-      ```
+1.  **Ensure you have appropriate AWS credentials**. Since the `mirror-ball-creator` role may not have permissions to delete all resources (like non-empty S3 buckets or specific IAM roles), you should use the **destroyer policy**.
+    - Go to the AWS Console -> IAM -> Roles.
+    - Select the role you use locally (e.g., `mirror-ball-creator` or your personal dev role).
+    - **Temporarily attach** the `mirror-ball-destroyer-policy` (content found in `apps/infra/permissions/mirror-ball-destroyer-policy.json`).
+2.  **Run the destroy command**:
+    ```bash
+    cd apps/infra
+    pnpm pulumi destroy
+    ```
+3.  **Confirm** the deletion when prompted. Pulumi will remove all resources it created.
+4.  **Cleanup**: Remember to detach the destroyer policy from your role after the operation is complete.

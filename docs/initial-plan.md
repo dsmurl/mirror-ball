@@ -157,7 +157,6 @@ Resources:
   - CloudFront OAC permissions to S3
   - Two GitHub OIDC deploy roles:
     - `mirror-ball-creator` — permissions to deploy/update (Pulumi up), build/push images, sync site.
-    - `mirror-ball-destroyer` — permissions to destroy the stack (Pulumi destroy). Use only in a dedicated GitHub Action workflow.
 
 Outputs:
 
@@ -199,7 +198,6 @@ Shared library development
   - Build and push API Docker image to ECR
   - `pulumi preview` on PR
   - On main: build site, push API image, `pulumi up` (updates infra/service), sync `site/` to S3
-  - Separate workflow: `destroy.yml` triggered manually (workflow_dispatch) that assumes the `mirror-ball-destroyer` role via OIDC and runs `pulumi destroy` for the specified stack.
 
   Type safety in CI
   - Add a CI step to type-check the shared library and both apps against it (e.g., `nx run-many -t typecheck`). Fail the build if any contract drift occurs.
@@ -213,7 +211,7 @@ Two-stage deployment flow
 
 Secrets/variables strategy
 
-- OIDC role ARNs: set as GitHub repository/environment variables (e.g., `AWS_ROLE_DEPLOYER_ARN`, `AWS_ROLE_DESTROYER_ARN`); referenced only by workflows, not committed in code.
+- OIDC role ARNs: set as GitHub repository/environment variables (e.g., `AWS_ROLE_DEPLOYER_ARN`); referenced only by workflows, not committed in code.
 - ECR repository name/URI: Pulumi creates the ECR repository and exports `ecrRepositoryUri`. CI reads it via `pulumi stack output` or uses a mirrored GitHub variable. Image tags use the commit SHA.
 - App Runner connection: image URI and env vars are provided in Stage 2; Pulumi updates the service accordingly.
 
@@ -272,7 +270,7 @@ M5 — Deploy & Verify
 - Build and push API image; two-stage apply: (1) provision infra, (2) wire image/env and update App Runner via `pulumi up`
 - Manual verification: login as dev/admin; upload, list/search, delete
 - Docs: `docs/post-deployment-verification.md` (end-to-end post-deployment-verification checklist)
-- CI: `destroy.yml` workflow present and documented; requires `mirror-ball-destroyer` role to execute.
+- CI: Deployment workflows present and documented.
 
 #### 13) Acceptance Criteria
 
@@ -358,7 +356,6 @@ M5 — Deploy & Verify
 - Upload site assets to S3 `site/`
 - Manual test scenarios for dev and admin
 - Write `docs/runbook.md` (checklist for verification; include a back-link to the root `README.md`)
-- Add `destroy.yml` workflow using OIDC to assume `mirror-ball-destroyer` and run `pulumi destroy` (documented in `docs/infra-setup.md`).
 - Manual test scenarios for user restriction via Admin Panel.
 
 #### 15) Open Questions / Decisions to Confirm
@@ -382,8 +379,8 @@ M5 — Deploy & Verify
 - General rule: As each app/area is implemented, include or update a doc in `docs/` explaining how to develop, run, and deploy it via GitHub Actions. Minimum set:
   - `docs/infra-setup.md`
     - Pulumi stack config keys (region, etc.)
-    - AWS requirements: IAM roles, OIDC trust for GitHub Actions, permissions boundaries if any
-    - Two roles via OIDC: `mirror-ball-creator` (deploy/update) and `mirror-ball-destroyer` (destroy). Detail least-privilege policies and guardrails.
+    - AWS requirements: IAM role, OIDC trust for GitHub Actions, permissions boundaries if any
+    - Deployment role via OIDC: `mirror-ball-creator` (deploy/update). Detail least-privilege policies and guardrails.
     - How CI uses Pulumi (no local CLI required)
   - `docs/api-local-dev.md`
     - How to run the Bun API locally, env vars, token testing, example curl commands

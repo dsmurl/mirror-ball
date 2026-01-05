@@ -39,4 +39,4 @@ Use a tool like `curl` or Postman, or verify via the Web UI's Network tab:
 - [ ] **GitHub Actions**: Deployment workflow completes without errors.
 - [ ] **S3 Sync**: Files are correctly synced to `s3://<bucket>/site/`.
 - [ ] **Invalidation**: CloudFront invalidation is triggered and completes.
-- [ ] **Destroy (Optional)**: If testing teardown, the `mirror-ball-destroyer` role successfully removes all resources.
+- [ ] **Destroy (Optional)**: If testing teardown, swap to the `mirror-ball-destroyer-policy` and run `pnpm pulumi destroy`.
