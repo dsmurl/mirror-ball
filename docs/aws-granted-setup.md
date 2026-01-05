@@ -1,3 +1,5 @@
+Back to [root README](../README.md)
+
 # AWS Access with Granted
 
 [Granted](https://granted.dev/) is a CLI tool that makes it easy to access multiple AWS accounts and roles. It is highly recommended for local development with Pulumi.
