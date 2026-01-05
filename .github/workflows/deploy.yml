@@ -77,10 +77,19 @@ jobs:
         id: outs
         working-directory: apps/infra
         run: |
-          echo "bucket=$(pulumi stack output --stack $STACK_NAME bucketName)" >> $GITHUB_OUTPUT
+          echo "bucket=$(pulumi stack output --stack $STACK_NAME imageBucketName)" >> $GITHUB_OUTPUT
           echo "cfid=$(pulumi stack output --stack $STACK_NAME cloudFrontDistributionId)" >> $GITHUB_OUTPUT
+          echo "cfdomain=$(pulumi stack output --stack $STACK_NAME cloudFrontDomainName)" >> $GITHUB_OUTPUT
+          echo "upId=$(pulumi stack output --stack $STACK_NAME userPoolId)" >> $GITHUB_OUTPUT
+          echo "upClientId=$(pulumi stack output --stack $STACK_NAME userPoolClientId)" >> $GITHUB_OUTPUT
+          echo "upDomain=$(pulumi stack output --stack $STACK_NAME userPoolDomain)" >> $GITHUB_OUTPUT
 
       - name: Build web
+        env:
+          VITE_API_BASE_URL: https://${{ steps.outs.outputs.cfdomain }}/api
+          VITE_USER_POOL_ID: ${{ steps.outs.outputs.upId }}
+          VITE_USER_POOL_CLIENT_ID: ${{ steps.outs.outputs.upClientId }}
+          VITE_COGNITO_DOMAIN: ${{ steps.outs.outputs.upDomain }}
         run: pnpm nx build web
 
       - name: Sync site to S3

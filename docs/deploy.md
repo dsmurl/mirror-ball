@@ -40,9 +40,10 @@ The site is built with Vite and uploaded to the S3 bucket under the `site/` pref
 
 ### Note on Build Variables
 
-The following variables from `apps/web/.env.example` are typically retrieved from Pulumi stack outputs during the CI/CD
-process to build the production bundle:
+The following variables from `apps/web/.env.example` are automatically retrieved from Pulumi stack outputs during the
+CI/CD process to build the production bundle:
 
+- `VITE_API_BASE_URL`
 - `VITE_USER_POOL_ID`
 - `VITE_USER_POOL_CLIENT_ID`
 - `VITE_COGNITO_DOMAIN`
@@ -63,7 +64,6 @@ The following should be configured in your GitHub Environment (e.g., `dev`):
 - `AWS_ROLE_DEPLOYER_ARN`: The ARN of the `mirror-ball-creator` IAM role.
   - Note: Role ARNs are identifiers and are safe to store as Variables; they require OIDC trust to be assumed.
 - `PROJECT_NAME`: Your project prefix (e.g., `sams-images`).
-- `VITE_API_BASE_URL`: The URL of your deployed API (e.g. `https://xxx.cloudfront.net/api`).
 - `PORT`: (Optional) API port, defaults to `8080`.
 
 See also:
