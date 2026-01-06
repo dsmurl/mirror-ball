@@ -54,7 +54,6 @@ Environment variables commonly used by the API (place in `apps/api/.env`):
 - `IMAGE_TABLE_NAME` - from `pulumi stack output`
 - `CONFIG_TABLE_NAME` - from `pulumi stack output`
 - `BUCKET_NAME` - from `pulumi stack output`
-- `CLOUDFRONT_DOMAIN` - from `pulumi stack output`
 - `USER_POOL_ID` - from `pulumi stack output`
 
 3. Start the web app (Vite)

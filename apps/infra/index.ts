@@ -305,7 +305,6 @@ const imageConfiguration: aws.types.input.apprunner.ServiceSourceConfigurationIm
       IMAGE_TABLE_NAME: imagesTable.name,
       CONFIG_TABLE_NAME: configTable.name,
       USER_POOL_ID: userPool.id,
-      // CLOUDFRONT_DOMAIN: apiDomain, // REMOVED to break circular dependency
     },
   };
 

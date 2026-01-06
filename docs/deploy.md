@@ -34,7 +34,6 @@ Runner service during deployment:
 - `CONFIG_TABLE_NAME`
 - `BUCKET_NAME`
 - `USER_POOL_ID`
-- `CLOUDFRONT_DOMAIN`
 
 ---
 

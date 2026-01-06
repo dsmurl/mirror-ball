@@ -114,6 +114,11 @@ export const Gallery = ({ searchTerm, onSearchChange }: GalleryProps) => {
         >
           {filteredImages.map((img) => {
             const isPdf = img.originalFileName?.toLowerCase().endsWith(".pdf");
+
+            const imagePublicUrl = img.publicUrl.startsWith("/")
+              ? `${window.location.origin}${img.publicUrl}`
+              : img.publicUrl;
+
             return (
               <div
                 key={img.imageId}
@@ -149,7 +154,7 @@ export const Gallery = ({ searchTerm, onSearchChange }: GalleryProps) => {
                   </div>
                 ) : (
                   <img
-                    src={img.publicUrl}
+                    src={imagePublicUrl}
                     alt={img.title}
                     style={{ width: "100%", height: 150, objectFit: "cover" }}
                   />
@@ -179,10 +184,10 @@ export const Gallery = ({ searchTerm, onSearchChange }: GalleryProps) => {
                         wordBreak: "break-all",
                       }}
                     >
-                      {img.publicUrl}
+                      {imagePublicUrl}
                     </div>
                     <button
-                      onClick={() => handleCopyLink(img.publicUrl)}
+                      onClick={() => handleCopyLink(imagePublicUrl)}
                       style={{
                         alignSelf: "flex-start",
                         background: "none",

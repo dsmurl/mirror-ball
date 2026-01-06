@@ -9,7 +9,7 @@ import { PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ulid } from "ulid";
 import { s3, doc } from "../lib/aws.ts";
-import { BUCKET_NAME, IMAGE_TABLE_NAME, REGION, CLOUDFRONT_DOMAIN } from "../lib/config.ts";
+import { BUCKET_NAME, IMAGE_TABLE_NAME } from "../lib/config.ts";
 import { json, error } from "../lib/responses.ts";
 import { authenticate, requireRole, emailAllowed } from "../middleware/auth.ts";
 
@@ -56,10 +56,9 @@ export async function presignUpload(req: Request) {
   const put = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key, ContentType: contentType });
   const uploadUrl = await getSignedUrl(s3, put, { expiresIn: 900 });
 
-  // Compute public URL via CloudFront if available; otherwise S3 virtual-hosted style
-  const cf = CLOUDFRONT_DOMAIN
-    ? `https://${CLOUDFRONT_DOMAIN}/${key}`
-    : `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${key}`;
+  // Use a relative path for the public URL.
+  // This makes the data domain-agnostic and simplifies deployment.
+  const publicUrl = `/${key}`;
 
   const now = new Date().toISOString();
   // Write stub item (pending)
@@ -76,7 +75,7 @@ export async function presignUpload(req: Request) {
         devName: owner,
         uploadTime: now,
         s3Key: key,
-        publicUrl: cf,
+        publicUrl: publicUrl,
         status: "pending",
       },
       ConditionExpression: "attribute_not_exists(imageId)",
@@ -86,7 +85,7 @@ export async function presignUpload(req: Request) {
   const out: z.infer<typeof PresignUploadOutput> = {
     uploadUrl,
     objectKey: key,
-    publicUrl: cf,
+    publicUrl: publicUrl,
     imageId,
   };
   return json(out);
