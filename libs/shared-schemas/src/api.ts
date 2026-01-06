@@ -10,9 +10,9 @@ export const PresignUploadInput = z.object({
 export type PresignUploadInput = z.infer<typeof PresignUploadInput>;
 
 export const PresignUploadOutput = z.object({
-  uploadUrl: z.string().url(),
+  uploadUrl: z.string(),
   objectKey: z.string().min(1),
-  publicUrl: z.string().url(),
+  publicUrl: z.string(),
   imageId: z.string().min(1),
 });
 export type PresignUploadOutput = z.infer<typeof PresignUploadOutput>;

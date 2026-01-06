@@ -96,9 +96,9 @@ Implementation: Bun HTTP service (e.g., using `Bun.serve` or Hono) running as a 
 Schema-first contracts with Zod
 
 - Define request/response schemas in a shared Nx lib (see Section 14 Tasks). Example schemas:
-  - `PresignUploadInput = z.object({ contentType: z.string(), fileName: z.string().min(1), devName: z.string().min(1) })`
-  - `PresignUploadOutput = z.object({ uploadUrl: z.string().url(), objectKey: z.string(), publicUrl: z.string().url(), imageId: z.string() })`
-  - `Image = z.object({ imageId: z.string(), owner: z.string(), devName: z.string(), uploadTime: z.string(), s3Key: z.string(), publicUrl: z.string().url() })`
+  - `PresignUploadInput = z.object({ contentType: z.string(), fileName: z.string().min(1) })`
+  - `PresignUploadOutput = z.object({ uploadUrl: z.string().url(), objectKey: z.string(), publicUrl: z.string(), imageId: z.string() })`
+  - `Image = z.object({ imageId: z.string(), owner: z.string(), uploadTime: z.string(), s3Key: z.string(), publicUrl: z.string() })`
 - API must `safeParse` inputs and return HTTP 400 with issues when invalid.
 - API must serialize outputs using the schemas to ensure shape stability.
 

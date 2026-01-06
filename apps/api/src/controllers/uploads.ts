@@ -72,7 +72,6 @@ export async function presignUpload(req: Request) {
         originalFileName: fileName,
         dimensions,
         fileSize,
-        devName: owner,
         uploadTime: now,
         s3Key: key,
         publicUrl: publicUrl,

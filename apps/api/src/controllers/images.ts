@@ -11,15 +11,21 @@ export async function listImages(req: Request) {
   const auth = await authenticate(req);
   if (auth instanceof Response) return auth;
 
+  console.log("  111 ::: ");
+
   const { searchParams } = new URL(req.url);
   const owner = searchParams.get("owner") ?? undefined;
   const devName = searchParams.get("devName") ?? undefined;
   const limit = Math.min(Number(searchParams.get("limit") ?? 50), 100);
 
+  console.log("  222 ::: ");
+
   const data = await doc.send(new ScanCommand({ TableName: IMAGE_TABLE_NAME, Limit: limit }));
   const items = (data.Items ?? []).filter(
     (it: any) => (owner ? it.owner === owner : true) && (devName ? it.devName === devName : true),
   );
+
+  console.log("  333 ::: ");
 
   const parsed = z.array(ImageSchema).safeParse(
     items.map((i: any) => ({
@@ -29,7 +35,6 @@ export async function listImages(req: Request) {
       originalFileName: i.originalFileName || "unknown",
       dimensions: i.dimensions,
       fileSize: i.fileSize,
-      devName: i.devName,
       uploadTime: i.uploadTime,
       s3Key: i.s3Key,
       publicUrl: i.publicUrl,
@@ -37,7 +42,11 @@ export async function listImages(req: Request) {
     })),
   );
 
+  console.log("  444 ::: ", { parsed, items, error: parsed.error });
   if (!parsed.success) return error(500, "Corrupt data", parsed.error.issues);
+
+  console.log("  555 ::: ");
+
   return json({ items: parsed.data, cursor: null });
 }
 

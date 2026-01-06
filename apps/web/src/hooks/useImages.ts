@@ -6,7 +6,6 @@ type ImageItem = {
   originalFileName: string;
   dimensions?: string;
   fileSize?: number;
-  devName: string;
   uploadTime: string;
   publicUrl: string;
 };
