@@ -20,7 +20,9 @@ export async function authenticate(
   if (!auth || !auth.startsWith("Bearer ")) return error(401, "Missing Bearer token");
   const token = auth.slice("Bearer ".length);
   if (!jwks) {
-    console.error(`[auth] jwks not initialized. USER_POOL_ID: "${USER_POOL_ID}", REGION: "${REGION}"`);
+    console.error(
+      `[auth] jwks not initialized. USER_POOL_ID: "${USER_POOL_ID}", REGION: "${REGION}"`,
+    );
     return error(500, "Auth not configured");
   }
   try {

@@ -424,7 +424,16 @@ const cfDistribution = new aws.cloudfront.Distribution(`${prefix}-Cdn`, {
       viewerProtocolPolicy: "redirect-to-https",
       allowedMethods: ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
       cachedMethods: ["GET", "HEAD", "OPTIONS"],
-      forwardedValues: { queryString: true, cookies: { forward: "all" } },
+      forwardedValues: {
+        queryString: true,
+        cookies: { forward: "all" },
+        headers: [
+          "Authorization",
+          "Origin",
+          "Access-Control-Request-Method",
+          "Access-Control-Request-Headers",
+        ],
+      },
       minTtl: 0,
       defaultTtl: 0,
       maxTtl: 0,
