@@ -9,6 +9,7 @@ dotenv.config();
 const config = new pulumi.Config();
 const awsConfig = new pulumi.Config("aws");
 const region = awsConfig.require("region");
+const cloudFrontDomainConfig = config.get("cloudFrontDomain");
 
 // Project Prefix for naming resources
 const projectNameEnv = process.env.PROJECT_NAME;
@@ -308,6 +309,7 @@ const imageConfiguration: aws.types.input.apprunner.ServiceSourceConfigurationIm
       IMAGE_TABLE_NAME: imagesTable.name,
       CONFIG_TABLE_NAME: configTable.name,
       USER_POOL_ID: userPool.id,
+      CLOUDFRONT_DOMAIN: cloudFrontDomainConfig ?? "",
     },
   };
 

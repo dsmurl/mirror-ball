@@ -74,6 +74,20 @@ jobs:
           FORCE_USE_PUBLIC_IMAGE: false
         run: pulumi up --yes --stack $STACK_NAME
 
+      - name: Auto-set CloudFront Domain
+        working-directory: apps/infra
+        run: |
+          CF_DOMAIN=$(pulumi stack output --stack $STACK_NAME cloudFrontDomainName)
+          CURRENT_CONF=$(pulumi config get cloudFrontDomain --stack $STACK_NAME || echo "")
+          if [ "$CF_DOMAIN" != "$CURRENT_CONF" ]; then
+            echo "Updating cloudFrontDomain config to $CF_DOMAIN"
+            pulumi config set cloudFrontDomain "$CF_DOMAIN" --stack $STACK_NAME
+            echo "Re-applying to inject CLOUDFRONT_DOMAIN environment variable"
+            pulumi up --yes --stack $STACK_NAME
+          else
+            echo "cloudFrontDomain config is already up to date ($CF_DOMAIN)"
+          fi
+
       - name: Read deploy outputs
         id: outs
         working-directory: apps/infra

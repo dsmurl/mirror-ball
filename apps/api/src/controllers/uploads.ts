@@ -9,7 +9,7 @@ import { PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ulid } from "ulid";
 import { s3, doc } from "../lib/aws.ts";
-import { BUCKET_NAME, IMAGE_TABLE_NAME } from "../lib/config.ts";
+import { BUCKET_NAME, IMAGE_TABLE_NAME, CLOUDFRONT_DOMAIN, REGION } from "../lib/config.ts";
 import { json, error } from "../lib/responses.ts";
 import { authenticate, requireRole, emailAllowed } from "../middleware/auth.ts";
 
@@ -28,6 +28,8 @@ export async function presignUpload(req: Request) {
 
   if (!BUCKET_NAME) return error(500, "BUCKET_NAME not configured");
   if (!IMAGE_TABLE_NAME) return error(500, "TABLE_NAME not configured");
+  if (!CLOUDFRONT_DOMAIN)
+    return error(500, "CLOUDFRONT_DOMAIN not configured. Deploy again to automate setup.");
 
   // Check for title uniqueness using GSI
   const existing = await doc.send(
@@ -56,9 +58,8 @@ export async function presignUpload(req: Request) {
   const put = new PutObjectCommand({ Bucket: BUCKET_NAME, Key: key, ContentType: contentType });
   const uploadUrl = await getSignedUrl(s3, put, { expiresIn: 900 });
 
-  // Use a relative path for the public URL.
-  // This makes the data domain-agnostic and simplifies deployment.
-  const publicUrl = `/${key}`;
+  // Compute public URL via CloudFront (required)
+  const publicUrl = `https://${CLOUDFRONT_DOMAIN}/${key}`;
 
   const now = new Date().toISOString();
   // Write stub item (pending)

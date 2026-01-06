@@ -189,11 +189,11 @@ To avoid the "Chicken and Egg" problem where App Runner fails because your ECR i
 _Note on Health Checks:_ Pulumi is configured to use a static **HTTP health check** on the root path (`/`). Since the standard Nginx image returns a 200 OK on `/` and our API is also configured to handle `/`, the health check will pass for both the placeholder and your real application without needing to change the infrastructure configuration.
 
 3.  **Deploy your real API**:
-    Once the infrastructure is up, you must follow **Section 8** to build and push your real API image with the `:bootstrap` tag. Pulumi will automatically detect the new image and switch from Skeleton Mode to your real API on the next `pulumi up`.
+    Once the infrastructure is up, you must follow **Section 8** to build and push your real API image with the `:dev-current` tag. Pulumi will automatically detect the new image and switch from Skeleton Mode to your real API on the next `pulumi up`.
 
 ### 8. Bootstrapping ECR (First Real API Image)
 
-App Runner cannot start your actual API without an image in ECR. While Skeleton Mode uses Nginx, you need to push your real application code to ECR using the `:bootstrap` tag to complete the setup.
+App Runner cannot start your actual API without an image in ECR. While Skeleton Mode uses Nginx, you need to push your real application code to ECR using the `dev-current` tag to complete the setup.
 
 **Note:** This step is only required if you want to deploy the first real image **manually from your local machine**. If you prefer, you can skip this manual push and let **GitHub Actions** handle the first real deployment by pushing your code to the `main` branch (after the infrastructure from Section 7 is up).
 
@@ -204,14 +204,21 @@ App Runner cannot start your actual API without an image in ECR. While Skeleton 
     assume   # your aws role
     aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com
     ```
-3.  **Build and push the "bootstrap" image**:
-    This is your real API code, tagged as `bootstrap` so Pulumi can find it by default. From the project root:
+3.  **Build and push the image**:
+    This is your real API code, tagged as `dev-current` so Pulumi can find it by default. From the project root:
     ```bash
     docker build -t mirror-ball-api -f apps/api/Dockerfile .
-    docker tag mirror-ball-api:latest <ECR_REPOSITORY_URI>:bootstrap
-    docker push <ECR_REPOSITORY_URI>:bootstrap
+    docker tag mirror-ball-api:latest <ECR_REPOSITORY_URI>:dev-current
+    docker push <ECR_REPOSITORY_URI>:dev-current
     ```
-4.  **Switch from Skeleton to Real API**:
+4.  **Set CloudFront Domain (Automated in CI)**:
+    To ensure absolute URLs for images in the database, the `cloudFrontDomain` must be set in the Pulumi config. While this is automatically handled by the **GitHub Actions deployment workflow**, you can set it manually for local development:
+
+    ```bash
+    pulumi config set cloudFrontDomain <DISTRIBUTION_DOMAIN>.cloudfront.net
+    ```
+
+5.  **Switch from Skeleton to Real API**:
     Pulumi will automatically detect the new image on the next `pulumi up`. If you had manually forced Skeleton Mode (`FORCE_USE_PUBLIC_IMAGE=true`), you should unset it or set it to `false`:
     ```bash
     export FORCE_USE_PUBLIC_IMAGE=false
