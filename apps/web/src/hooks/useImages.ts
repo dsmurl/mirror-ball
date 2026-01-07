@@ -1,14 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-
-type ImageItem = {
-  imageId: string;
-  title: string;
-  originalFileName: string;
-  dimensions?: string;
-  fileSize?: number;
-  uploadTime: string;
-  publicUrl: string;
-};
+import { ImageItem } from "@mirror-ball/shared-schemas/image.ts";
 
 type useImagesProps = {
   token: string;

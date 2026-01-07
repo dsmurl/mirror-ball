@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ImageSchema = z.object({
+export const ImageItemSchema = z.object({
   imageId: z.string(),
   owner: z.string(),
   title: z.string(),
@@ -13,13 +13,4 @@ export const ImageSchema = z.object({
   status: z.string().optional(),
 });
 
-export type Image = z.infer<typeof ImageSchema>;
-
-export const ListImagesQuerySchema = z.object({
-  owner: z.string().optional(),
-  prefix: z.string().optional(),
-  limit: z.number().int().positive().max(100).optional(),
-  cursor: z.string().optional(),
-});
-
-export type ListImagesQuery = z.infer<typeof ListImagesQuerySchema>;
+export type ImageItem = z.infer<typeof ImageItemSchema>;

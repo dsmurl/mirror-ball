@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ImageSchema } from "@mirror-ball/shared-schemas/image";
+import { ImageItemSchema } from "@mirror-ball/shared-schemas/image";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { s3, doc } from "../lib/aws.ts";
@@ -11,23 +11,17 @@ export async function listImages(req: Request) {
   const auth = await authenticate(req);
   if (auth instanceof Response) return auth;
 
-  console.log("  111 ::: ");
-
   const { searchParams } = new URL(req.url);
   const owner = searchParams.get("owner") ?? undefined;
   const devName = searchParams.get("devName") ?? undefined;
   const limit = Math.min(Number(searchParams.get("limit") ?? 50), 100);
-
-  console.log("  222 ::: ");
 
   const data = await doc.send(new ScanCommand({ TableName: IMAGE_TABLE_NAME, Limit: limit }));
   const items = (data.Items ?? []).filter(
     (it: any) => (owner ? it.owner === owner : true) && (devName ? it.devName === devName : true),
   );
 
-  console.log("  333 ::: ");
-
-  const parsed = z.array(ImageSchema).safeParse(
+  const parsed = z.array(ImageItemSchema).safeParse(
     items.map((i: any) => ({
       imageId: i.imageId,
       owner: i.owner,
@@ -42,10 +36,7 @@ export async function listImages(req: Request) {
     })),
   );
 
-  console.log("  444 ::: ", { parsed, items, error: parsed.error });
   if (!parsed.success) return error(500, "Corrupt data", parsed.error.issues);
-
-  console.log("  555 ::: ");
 
   return json({ items: parsed.data, cursor: null });
 }

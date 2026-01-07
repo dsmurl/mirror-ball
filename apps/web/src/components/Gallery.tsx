@@ -1,7 +1,7 @@
 import { useImages } from "../hooks/useImages";
 import { useAuthContext } from "../contexts/AuthContext.tsx";
 import { useEnv } from "../hooks/useEnv";
-import { useToast } from "../hooks/useToast.ts";
+import { useToastContext } from "../contexts/ToastContext.tsx";
 
 type GalleryProps = {
   searchTerm: string;
@@ -18,7 +18,7 @@ function formatFileSize(bytes?: number) {
 export const Gallery = ({ searchTerm, onSearchChange }: GalleryProps) => {
   const { token } = useAuthContext();
   const { API_BASE } = useEnv();
-  const { showToast } = useToast();
+  const { showToast } = useToastContext();
   const { images, isLoading, error } = useImages({ token, apiBase: API_BASE });
 
   const handleCopyLink = (url: string) => {
@@ -174,7 +174,7 @@ export const Gallery = ({ searchTerm, onSearchChange }: GalleryProps) => {
                     {img.fileSize ? ` • ${formatFileSize(img.fileSize)}` : ""}
                   </div>
                   <div style={{ color: "#666", marginBottom: 8, wordBreak: "break-word" }}>
-                    {img.devName} • {new Date(img.uploadTime).toLocaleDateString()}
+                    {img.owner} • {new Date(img.uploadTime).toLocaleDateString()}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
                     <div

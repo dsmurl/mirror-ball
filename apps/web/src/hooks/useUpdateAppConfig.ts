@@ -1,14 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "./useToast";
+
 import { useEnv } from "./useEnv.ts";
 import { HttpError } from "@mirror-ball/shared-schemas/HttpError";
+import { useToastContext } from "../contexts/ToastContext.tsx";
 
 export const useUpdateAppConfig = (token?: string) => {
   const { API_BASE } = useEnv();
   const queryClient = useQueryClient();
-  const { showToast } = useToast();
+  const { showToast } = useToastContext();
 
-  const mutation = useMutation({
+  return useMutation({
     mutationFn: async (newConfig: { userRestriction: string }) => {
       const res = await fetch(`${API_BASE}/config`, {
         method: "POST",
@@ -22,14 +23,12 @@ export const useUpdateAppConfig = (token?: string) => {
 
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["appConfig"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["appConfig"] });
       showToast("Settings saved successfully!");
     },
     onError: (err: any) => {
       alert(`Failed to save: ${err.message}`);
     },
   });
-
-  return mutation;
 };

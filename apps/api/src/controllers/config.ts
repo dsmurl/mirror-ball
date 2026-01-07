@@ -65,7 +65,7 @@ export async function getConfig(req: Request) {
   const config = await fetchFullConfig();
   const userRestriction = config?.userRestriction || "";
 
-  // Calculate isRestricted based on current user's email
+  // Calculate isRestricted based on the current user's email
   const isRestricted = !!(
     userRestriction &&
     (!claims.email || !claims.email.toLowerCase().includes(userRestriction.toLowerCase()))
